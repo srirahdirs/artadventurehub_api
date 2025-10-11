@@ -20,11 +20,14 @@ import {
     likeSubmission,
     voteSubmission,
     unlikeSubmission,
+    unvoteSubmission,
     // Comment features
     addComment,
     getComments,
     likeComment,
-    deleteComment
+    deleteComment,
+    // Public features
+    getPublicSubmission
 } from '../controllers/campaignController.js';
 
 const router = express.Router();
@@ -97,12 +100,16 @@ router.get('/feed', getSubmissionsFeed);
 router.post('/like', likeSubmission);
 router.post('/unlike', unlikeSubmission);
 router.post('/vote', voteSubmission);
+router.post('/unvote', unvoteSubmission);
 
 // ============ COMMENT ROUTES ============
 router.post('/comment', addComment);
 router.get('/comment/:submission_id', getComments);
 router.delete('/comment/:comment_id', deleteComment);
 router.post('/comment/:comment_id/like', likeComment);
+
+// ============ PUBLIC ROUTES (NO AUTH REQUIRED) ============
+router.get('/submission/:submissionId', getPublicSubmission);
 
 export default router;
 

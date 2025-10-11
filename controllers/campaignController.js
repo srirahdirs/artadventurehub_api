@@ -779,6 +779,46 @@ export const voteSubmission = async (req, res) => {
     }
 };
 
+// Unvote a submission
+export const unvoteSubmission = async (req, res) => {
+    try {
+        const { submission_id, user_id } = req.body;
+
+        if (!submission_id || !user_id) {
+            return res.status(400).json({
+                success: false,
+                message: 'Submission ID and User ID are required'
+            });
+        }
+
+        const submission = await CampaignSubmission.findById(submission_id);
+
+        if (!submission) {
+            return res.status(404).json({
+                success: false,
+                message: 'Submission not found'
+            });
+        }
+
+        // Decrement votes (ensure it doesn't go below 0)
+        submission.votes = Math.max(0, submission.votes - 1);
+        await submission.save();
+
+        res.json({
+            success: true,
+            message: 'Unvoted successfully',
+            votes: submission.votes
+        });
+    } catch (error) {
+        console.error('Unvote Submission Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error unvoting submission',
+            error: error.message
+        });
+    }
+};
+
 // Unlike a submission
 export const unlikeSubmission = async (req, res) => {
     try {
@@ -1044,6 +1084,68 @@ export const likeComment = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error liking comment',
+            error: error.message
+        });
+    }
+};
+
+// Get public submission view (no authentication required)
+export const getPublicSubmission = async (req, res) => {
+    try {
+        const { submissionId } = req.params;
+
+        if (!submissionId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Submission ID is required'
+            });
+        }
+
+        const submission = await CampaignSubmission.findById(submissionId)
+            .populate('user_id', 'username mobile')
+            .populate('campaign_id', 'title description image_url submission_type');
+
+        if (!submission) {
+            return res.status(404).json({
+                success: false,
+                message: 'Submission not found'
+            });
+        }
+
+        // Return public data (no sensitive information)
+        const publicSubmission = {
+            id: submission._id,
+            artwork_url: submission.submission_image,
+            submission_type: submission.campaign_id?.submission_type || 'offline',
+            likes: submission.likes || 0,
+            votes: submission.votes || 0,
+            created_at: submission.createdAt || submission.submitted_at,
+            user: {
+                id: submission.user_id?._id,
+                username: submission.user_id?.username,
+                mobile: submission.user_id?.mobile ?
+                    submission.user_id.mobile.replace(/(\d{2})\d{6}(\d{2})/, '$1******$2') : null
+            },
+            campaign: submission.campaign_id ? {
+                id: submission.campaign_id._id,
+                title: submission.campaign_id.title,
+                description: submission.campaign_id.description,
+                image_url: submission.campaign_id.image_url,
+                submission_type: submission.campaign_id.submission_type
+            } : null
+        };
+
+        res.json({
+            success: true,
+            submission: publicSubmission,
+            campaign: publicSubmission.campaign
+        });
+
+    } catch (error) {
+        console.error('Error fetching public submission:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching submission',
             error: error.message
         });
     }

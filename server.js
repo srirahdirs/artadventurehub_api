@@ -24,6 +24,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // ✅ Allowed origins (only your sites)
 const allowedOrigins = [
     'http://localhost:5173',
+    'http://localhost:5000',
     'https://artadventurehub.com',
     'https://www.artadventurehub.com'
 ];
@@ -32,7 +33,11 @@ const allowedOrigins = [
 app.use(
     cors({
         origin: function (origin, callback) {
-            if (!origin) return callback(null, true); // allow curl, postman, etc.
+            // Allow requests with no origin (like mobile apps, curl, postman, or direct navigation)
+            if (!origin) {
+                return callback(null, true);
+            }
+
             if (allowedOrigins.includes(origin)) {
                 callback(null, true);
             } else {
