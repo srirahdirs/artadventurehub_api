@@ -17,30 +17,34 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+
 const allowedOrigins = [
-    'http://localhost:5173',       // keep for local dev
-    'https://artadventurehub.com', // production frontend
+    'http://localhost:5173',
+    'https://artadventurehub.com',
     'https://www.artadventurehub.com'
 ];
-// Serve static files from uploads directory with CORS headers
-app.use('/uploads', (req, res, next) => {
-    const origin = req.headers.origin;
 
-    if (allowedOrigins.includes(origin)) {
-        res.header('Access-Control-Allow-Origin', origin);
-        res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
-        res.header('Access-Control-Allow-Headers', 'Content-Type');
-        res.header('Access-Control-Allow-Credentials', 'true');
-    }
+// ✅ Apply CORS globally (handles all routes including /api and /uploads)
+app.use(cors({
+    origin: function (origin, callback) {
+        // Allow requests with no origin (for mobile apps, curl, etc.)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        } else {
+            return callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
-    // Handle preflight requests
-    if (req.method === 'OPTIONS') {
-        res.sendStatus(200);
-        return;
-    }
+// ✅ Handle preflight globally (optional, improves compatibility)
+app.options('*', cors());
 
-    next();
-}, express.static(path.join(__dirname, 'uploads')));
+// ✅ Serve static files (no need for duplicate CORS logic)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Special route for downloading images
 app.get('/download/:filename', (req, res) => {
