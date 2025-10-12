@@ -6,6 +6,7 @@ import mongoose from 'mongoose';
 import userRoutes from './routes/userRoutes.js';
 import campaignRoutes from './routes/campaignRoutes.js';
 import uploadRoutes from './routes/uploadRoutes.js';
+import contactRoutes from './routes/contactRoutes.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -91,6 +92,7 @@ mongoose
 // ✅ Routes
 app.use('/api/users', userRoutes);
 app.use('/api/campaigns', campaignRoutes);
+app.use('/api/contact', contactRoutes);
 app.use('/api', uploadRoutes);
 
 // ✅ MSG91 Configuration (keep these in .env for safety)
