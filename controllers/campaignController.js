@@ -1,6 +1,7 @@
 import Campaign from '../models/Campaign.js';
 import CampaignSubmission from '../models/CampaignSubmission.js';
 import Comment from '../models/Comment.js';
+import { awardReferralPoints } from './referralController.js';
 
 // ============ ADMIN OPERATIONS ============
 
@@ -475,6 +476,27 @@ export const submitArtwork = async (req, res) => {
             });
         }
 
+        // Check if payment method is points
+        const User = (await import('../models/User.js')).default;
+        const user = await User.findById(user_id);
+
+        if (payment_method === 'points') {
+            const POINTS_REQUIRED = 500; // 500 points = ₹100 entry fee
+
+            if (user.points < POINTS_REQUIRED) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Insufficient points. You need ${POINTS_REQUIRED} points but have only ${user.points} points.`
+                });
+            }
+
+            // Deduct points
+            user.points -= POINTS_REQUIRED;
+            await user.save();
+
+            console.log(`✅ Deducted ${POINTS_REQUIRED} points from user ${user.username || user.mobile_number}`);
+        }
+
         // Create submission
         const submission = new CampaignSubmission({
             campaign_id,
@@ -492,6 +514,17 @@ export const submitArtwork = async (req, res) => {
         // Increment participant count
         campaign.current_participants += 1;
         await campaign.save();
+
+        // Award referral points if this is user's first campaign
+        try {
+            const referralResult = await awardReferralPoints(user_id);
+            if (referralResult.success) {
+                console.log('✅ Referral points awarded:', referralResult.pointsAwarded);
+            }
+        } catch (err) {
+            console.error('Referral points award error (non-fatal):', err);
+            // Don't fail submission if referral fails
+        }
 
         res.status(201).json({
             success: true,

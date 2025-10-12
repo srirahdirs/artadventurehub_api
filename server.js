@@ -7,6 +7,7 @@ import userRoutes from './routes/userRoutes.js';
 import campaignRoutes from './routes/campaignRoutes.js';
 import uploadRoutes from './routes/uploadRoutes.js';
 import contactRoutes from './routes/contactRoutes.js';
+import referralRoutes from './routes/referralRoutes.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -93,6 +94,7 @@ mongoose
 app.use('/api/users', userRoutes);
 app.use('/api/campaigns', campaignRoutes);
 app.use('/api/contact', contactRoutes);
+app.use('/api/referrals', referralRoutes);
 app.use('/api', uploadRoutes);
 
 // ✅ MSG91 Configuration (keep these in .env for safety)
@@ -161,6 +163,8 @@ app.post('/api/otp/verify', async (req, res) => {
                     bio: user.bio,
                     avatar: user.avatar,
                     status: user.status,
+                    points: user.points,
+                    referral_code: user.referral_code,
                 },
             });
         } else {

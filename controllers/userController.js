@@ -33,7 +33,9 @@ export const createOrUpdateUser = async (req, res) => {
                     username: user.username,
                     bio: user.bio,
                     avatar: user.avatar,
-                    status: user.status
+                    status: user.status,
+                    points: user.points,
+                    referral_code: user.referral_code
                 }
             });
         } else {
@@ -55,7 +57,9 @@ export const createOrUpdateUser = async (req, res) => {
                     username: user.username,
                     bio: user.bio,
                     avatar: user.avatar,
-                    status: user.status
+                    status: user.status,
+                    points: user.points,
+                    referral_code: user.referral_code
                 }
             });
         }
@@ -121,6 +125,8 @@ export const getAllUsers = async (req, res) => {
                 bio: user.bio,
                 avatar: user.avatar,
                 status: user.status,
+                points: user.points,
+                referral_code: user.referral_code,
                 createdAt: user.createdAt,
                 updatedAt: user.updatedAt
             }))
@@ -255,7 +261,9 @@ export const signInWithPassword = async (req, res) => {
                 username: user.username,
                 bio: user.bio,
                 avatar: user.avatar,
-                status: user.status
+                status: user.status,
+                points: user.points,
+                referral_code: user.referral_code
             }
         });
     } catch (error) {
@@ -373,7 +381,9 @@ export const signInWithOTP = async (req, res) => {
                 username: user.username,
                 bio: user.bio,
                 avatar: user.avatar,
-                status: user.status
+                status: user.status,
+                points: user.points,
+                referral_code: user.referral_code
             }
         });
     } catch (error) {
@@ -626,6 +636,10 @@ export const getUserProfile = async (req, res) => {
                 bio: user.bio,
                 avatar: user.avatar,
                 status: user.status,
+                points: user.points,
+                referral_code: user.referral_code,
+                total_referrals: user.total_referrals,
+                successful_referrals: user.successful_referrals,
                 createdAt: user.createdAt,
                 updatedAt: user.updatedAt
             }

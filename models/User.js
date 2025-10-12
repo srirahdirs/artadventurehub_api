@@ -33,10 +33,39 @@ const userSchema = new mongoose.Schema({
         type: String,
         enum: ['verified', 'not_verified'],
         default: 'not_verified'
+    },
+    // Referral & Points System
+    referral_code: {
+        type: String,
+        unique: true,
+        sparse: true
+    },
+    referred_by: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: null
+    },
+    points: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
+    total_referrals: {
+        type: Number,
+        default: 0
+    },
+    successful_referrals: {
+        type: Number,
+        default: 0
     }
 }, {
     timestamps: true // This will add createdAt and updatedAt fields
 });
+
+// Generate unique referral code
+const generateReferralCode = () => {
+    return 'ART' + Math.random().toString(36).substring(2, 8).toUpperCase();
+};
 
 // Convert empty fields to undefined and hash password before saving
 userSchema.pre('save', async function (next) {
@@ -45,6 +74,18 @@ userSchema.pre('save', async function (next) {
     }
     if (this.password === '') {
         this.password = undefined;
+    }
+
+    // Generate referral code if new user and doesn't have one
+    if (this.isNew && !this.referral_code) {
+        let code = generateReferralCode();
+        // Ensure uniqueness
+        let exists = await mongoose.model('User').findOne({ referral_code: code });
+        while (exists) {
+            code = generateReferralCode();
+            exists = await mongoose.model('User').findOne({ referral_code: code });
+        }
+        this.referral_code = code;
     }
 
     // Hash password if it's modified and not empty
