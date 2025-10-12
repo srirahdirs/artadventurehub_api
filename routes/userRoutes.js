@@ -9,7 +9,9 @@ import {
     requestOTPSignIn,
     signInWithOTP,
     requestPasswordReset,
-    resetPasswordWithOTP
+    resetPasswordWithOTP,
+    getUserProfile,
+    updateUserProfile
 } from '../controllers/userController.js';
 
 const router = express.Router();
@@ -42,17 +44,8 @@ const authMiddleware = (req, res, next) => {
 // Create or update user
 router.post('/create', createOrUpdateUser);
 
-// Get user by mobile number
-router.get('/:mobile_number', getUserByMobile);
-
 // Get all users
 router.get('/', getAllUsers);
-
-// Update username and password
-router.put('/username', updateUsername);
-
-// Update username for authenticated user
-router.put('/update-username', authMiddleware, updateUsernameAuth);
 
 // Authentication routes
 router.post('/signin/password', signInWithPassword);
@@ -62,6 +55,19 @@ router.post('/signin/otp/verify', signInWithOTP);
 // Password reset routes
 router.post('/forgot-password', requestPasswordReset);
 router.post('/reset-password', resetPasswordWithOTP);
+
+// Update username and password
+router.put('/username', updateUsername);
+
+// Update username for authenticated user
+router.put('/update-username', authMiddleware, updateUsernameAuth);
+
+// Profile routes (must come before :mobile_number route)
+router.get('/:userId/profile', getUserProfile);
+router.put('/:userId/profile', updateUserProfile);
+
+// Get user by mobile number (must be last to avoid conflicts)
+router.get('/:mobile_number', getUserByMobile);
 
 export default router;
 

@@ -31,6 +31,8 @@ export const createOrUpdateUser = async (req, res) => {
                     id: user._id,
                     mobile_number: user.mobile_number,
                     username: user.username,
+                    bio: user.bio,
+                    avatar: user.avatar,
                     status: user.status
                 }
             });
@@ -51,6 +53,8 @@ export const createOrUpdateUser = async (req, res) => {
                     id: user._id,
                     mobile_number: user.mobile_number,
                     username: user.username,
+                    bio: user.bio,
+                    avatar: user.avatar,
                     status: user.status
                 }
             });
@@ -85,6 +89,8 @@ export const getUserByMobile = async (req, res) => {
                 id: user._id,
                 mobile_number: user.mobile_number,
                 username: user.username,
+                bio: user.bio,
+                avatar: user.avatar,
                 status: user.status,
                 createdAt: user.createdAt,
                 updatedAt: user.updatedAt
@@ -112,6 +118,8 @@ export const getAllUsers = async (req, res) => {
                 id: user._id,
                 mobile_number: user.mobile_number,
                 username: user.username,
+                bio: user.bio,
+                avatar: user.avatar,
                 status: user.status,
                 createdAt: user.createdAt,
                 updatedAt: user.updatedAt
@@ -181,6 +189,8 @@ export const updateUsername = async (req, res) => {
                 id: user._id,
                 mobile_number: user.mobile_number,
                 username: user.username,
+                bio: user.bio,
+                avatar: user.avatar,
                 status: user.status,
                 hasPassword: !!user.password
             }
@@ -243,6 +253,8 @@ export const signInWithPassword = async (req, res) => {
                 id: user._id,
                 mobile_number: user.mobile_number,
                 username: user.username,
+                bio: user.bio,
+                avatar: user.avatar,
                 status: user.status
             }
         });
@@ -359,6 +371,8 @@ export const signInWithOTP = async (req, res) => {
                 id: user._id,
                 mobile_number: user.mobile_number,
                 username: user.username,
+                bio: user.bio,
+                avatar: user.avatar,
                 status: user.status
             }
         });
@@ -422,6 +436,8 @@ export const updateUsernameAuth = async (req, res) => {
                 id: user._id,
                 mobile_number: user.mobile_number,
                 username: user.username,
+                bio: user.bio,
+                avatar: user.avatar,
                 status: user.status
             }
         });
@@ -582,6 +598,102 @@ export const resetPasswordWithOTP = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error resetting password',
+            error: error.message
+        });
+    }
+};
+
+// Get user profile by ID
+export const getUserProfile = async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        const user = await User.findById(userId).select('-password');
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        res.json({
+            success: true,
+            user: {
+                id: user._id,
+                mobile_number: user.mobile_number,
+                username: user.username,
+                bio: user.bio,
+                avatar: user.avatar,
+                status: user.status,
+                createdAt: user.createdAt,
+                updatedAt: user.updatedAt
+            }
+        });
+    } catch (error) {
+        console.error('Get User Profile Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching user profile',
+            error: error.message
+        });
+    }
+};
+
+// Update user profile (bio, avatar ONLY - username is immutable)
+export const updateUserProfile = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { bio, avatar } = req.body;
+
+        const user = await User.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        // Username is immutable - cannot be changed via this endpoint
+        // Users can only set username once via updateUsername endpoint
+
+        // Update bio if provided
+        if (bio !== undefined) {
+            if (bio.length > 200) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Bio must not exceed 200 characters'
+                });
+            }
+            user.bio = bio;
+        }
+
+        // Update avatar if provided
+        if (avatar !== undefined) {
+            user.avatar = avatar;
+        }
+
+        await user.save();
+
+        res.json({
+            success: true,
+            message: 'Profile updated successfully',
+            user: {
+                id: user._id,
+                mobile_number: user.mobile_number,
+                username: user.username,
+                bio: user.bio,
+                avatar: user.avatar,
+                status: user.status
+            }
+        });
+    } catch (error) {
+        console.error('Update Profile Error:', error);
+
+        res.status(500).json({
+            success: false,
+            message: 'Error updating profile',
             error: error.message
         });
     }

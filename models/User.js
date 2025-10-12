@@ -19,6 +19,16 @@ const userSchema = new mongoose.Schema({
         type: String,
         default: undefined
     },
+    bio: {
+        type: String,
+        trim: true,
+        maxlength: 200,
+        default: ''
+    },
+    avatar: {
+        type: String,
+        default: ''
+    },
     status: {
         type: String,
         enum: ['verified', 'not_verified'],

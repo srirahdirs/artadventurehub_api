@@ -538,7 +538,7 @@ export const getCampaignParticipants = async (req, res) => {
         const { campaign_id } = req.params;
 
         const participants = await CampaignSubmission.find({ campaign_id })
-            .populate('user_id', 'username mobile_number')
+            .populate('user_id', 'username mobile_number bio avatar')
             .select('user_id submitted_at status')
             .sort({ submitted_at: -1 });
 
@@ -546,6 +546,8 @@ export const getCampaignParticipants = async (req, res) => {
             id: participant.user_id._id,
             username: participant.user_id.username,
             mobile_number: participant.user_id.mobile_number,
+            bio: participant.user_id.bio,
+            avatar: participant.user_id.avatar,
             submitted_at: participant.submitted_at,
             status: participant.status
         }));
@@ -574,7 +576,7 @@ export const getCampaignLeaderboard = async (req, res) => {
             campaign_id,
             status: { $in: ['approved', 'winner', 'runner_up'] }
         })
-            .populate('user_id', 'username mobile_number')
+            .populate('user_id', 'username mobile_number bio avatar')
             .sort({ admin_rating: -1, votes: -1, likes: -1 })
             .limit(20);
 
@@ -621,7 +623,7 @@ export const getSubmissionsFeed = async (req, res) => {
         const submissions = await CampaignSubmission.find({
             status: { $in: ['submitted', 'approved', 'winner', 'runner_up'] }
         })
-            .populate('user_id', 'username mobile_number')
+            .populate('user_id', 'username mobile_number bio avatar')
             .populate('campaign_id')
             .sort({ submitted_at: -1 })
             .limit(limitNum)
@@ -656,7 +658,9 @@ export const getSubmissionsFeed = async (req, res) => {
                 user: {
                     id: sub.user_id?._id,
                     username: sub.user_id?.username && sub.user_id.username.trim() ? sub.user_id.username : 'Anonymous',
-                    mobile: sub.user_id?.mobile_number
+                    mobile: sub.user_id?.mobile_number,
+                    bio: sub.user_id?.bio,
+                    avatar: sub.user_id?.avatar
                 },
                 campaign: sub.campaign_id ? {
                     _id: sub.campaign_id._id,
@@ -900,7 +904,7 @@ export const addComment = async (req, res) => {
         await comment.save();
 
         // Populate user data for response
-        await comment.populate('user_id', 'username mobile_number');
+        await comment.populate('user_id', 'username mobile_number bio avatar');
 
         res.status(201).json({
             success: true,
@@ -911,7 +915,9 @@ export const addComment = async (req, res) => {
                 user: {
                     id: comment.user_id._id,
                     username: comment.user_id.username && comment.user_id.username.trim() ? comment.user_id.username : 'Anonymous',
-                    mobile: comment.user_id.mobile_number
+                    mobile: comment.user_id.mobile_number,
+                    bio: comment.user_id.bio,
+                    avatar: comment.user_id.avatar
                 },
                 likes: comment.likes,
                 created_at: comment.created_at
@@ -948,7 +954,7 @@ export const getComments = async (req, res) => {
             submission_id,
             is_approved: true
         })
-            .populate('user_id', 'username mobile_number')
+            .populate('user_id', 'username mobile_number bio avatar')
             .sort({ created_at: -1 })
             .limit(limitNum)
             .skip(skipNum);
@@ -971,7 +977,9 @@ export const getComments = async (req, res) => {
                 user: {
                     id: comment.user_id._id,
                     username: comment.user_id.username && comment.user_id.username.trim() ? comment.user_id.username : 'Anonymous',
-                    mobile: comment.user_id.mobile_number
+                    mobile: comment.user_id.mobile_number,
+                    bio: comment.user_id.bio,
+                    avatar: comment.user_id.avatar
                 },
                 likes: comment.likes,
                 created_at: comment.created_at

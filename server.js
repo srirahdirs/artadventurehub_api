@@ -156,6 +156,8 @@ app.post('/api/otp/verify', async (req, res) => {
                     id: user._id,
                     mobile_number: user.mobile_number,
                     username: user.username,
+                    bio: user.bio,
+                    avatar: user.avatar,
                     status: user.status,
                 },
             });
