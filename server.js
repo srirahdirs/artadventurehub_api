@@ -26,6 +26,8 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // ✅ Allowed origins (only your sites)
 const allowedOrigins = [
     'http://localhost:5173',
+    'http://localhost:3001',
+    'http://localhost:3033',
     'http://localhost:5000',
     'https://artadventurehub.com',
     'https://www.artadventurehub.com'
@@ -48,7 +50,7 @@ app.use(
             }
         },
         credentials: true,
-        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
         allowedHeaders: ['Content-Type', 'Authorization'],
     })
 );
@@ -84,9 +86,17 @@ app.get('/download/:filename', (req, res) => {
     });
 });
 
-// ✅ MongoDB Connection
+// ✅ MongoDB Connection with proper options
 mongoose
-    .connect(process.env.MONGO_URI)
+    .connect(process.env.MONGO_URI, {
+        serverSelectionTimeoutMS: 30000, // 30 seconds
+        socketTimeoutMS: 45000, // 45 seconds
+        bufferCommands: false,
+        maxPoolSize: 10,
+        minPoolSize: 5,
+        maxIdleTimeMS: 30000,
+        connectTimeoutMS: 30000,
+    })
     .then(() => console.log('✅ Connected to MongoDB'))
     .catch((err) => console.error('❌ MongoDB connection error:', err));
 
@@ -214,6 +224,6 @@ app.get('/health', (req, res) => {
 });
 
 // ✅ Start server
-app.listen(PORT, () => {
-    console.log(`🚀 API running on port ${PORT}`);
+app.listen(3033, () => {
+    console.log(`🚀 API running on port 3033`);
 });

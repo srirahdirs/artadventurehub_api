@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Campaign from '../models/Campaign.js';
 import CampaignSubmission from '../models/CampaignSubmission.js';
 import Comment from '../models/Comment.js';
@@ -8,13 +9,17 @@ import { awardReferralPoints } from './referralController.js';
 // Create a new campaign (Admin)
 export const createCampaign = async (req, res) => {
     try {
+        console.log('📝 Creating campaign with data:', req.body);
+
         const {
             name,
             description,
             reference_image,
             max_participants,
+            campaign_type,
             entry_fee_amount,
             entry_fee_type,
+            points_required,
             first_prize,
             second_prize,
             platform_share,
@@ -36,15 +41,27 @@ export const createCampaign = async (req, res) => {
             });
         }
 
+        // Check MongoDB connection
+        if (mongoose.connection.readyState !== 1) {
+            console.error('❌ MongoDB not connected. State:', mongoose.connection.readyState);
+            return res.status(500).json({
+                success: false,
+                message: 'Database connection error. Please try again.',
+                error: 'MongoDB not connected'
+            });
+        }
+
         const campaign = new Campaign({
             name,
             description,
             reference_image,
             max_participants: max_participants || 20,
+            campaign_type: campaign_type || 'premium', // premium or point-based
             entry_fee: {
                 amount: entry_fee_amount || 100,
                 type: entry_fee_type || 'rupees'
             },
+            points_required: points_required || 500, // Points needed for point-based campaigns
             prizes: {
                 first_prize: first_prize || 1000,
                 second_prize: second_prize || 500,
@@ -61,7 +78,9 @@ export const createCampaign = async (req, res) => {
             created_by: req.user?.username || 'Admin'
         });
 
+        console.log('💾 Saving campaign to database...');
         await campaign.save();
+        console.log('✅ Campaign saved successfully:', campaign._id);
 
         res.status(201).json({
             success: true,
@@ -69,7 +88,25 @@ export const createCampaign = async (req, res) => {
             campaign
         });
     } catch (error) {
-        console.error('Create Campaign Error:', error);
+        console.error('❌ Create Campaign Error:', error);
+
+        // Handle specific MongoDB errors
+        if (error.name === 'MongoNetworkError') {
+            return res.status(500).json({
+                success: false,
+                message: 'Database connection error. Please check your internet connection and try again.',
+                error: 'Network error'
+            });
+        }
+
+        if (error.name === 'MongoTimeoutError') {
+            return res.status(500).json({
+                success: false,
+                message: 'Database operation timed out. Please try again.',
+                error: 'Timeout error'
+            });
+        }
+
         res.status(500).json({
             success: false,
             message: 'Error creating campaign',
@@ -401,7 +438,9 @@ export const getActiveCampaigns = async (req, res) => {
             reference_image: campaign.reference_image,
             max_participants: campaign.max_participants,
             current_participants: campaign.current_participants,
+            campaign_type: campaign.campaign_type, // paid, free, or point-based
             entry_fee: campaign.entry_fee,
+            points_required: campaign.points_required, // Points needed for point-based entry
             prizes: campaign.prizes,
             category: campaign.category,
             age_group: campaign.age_group,
@@ -476,25 +515,46 @@ export const submitArtwork = async (req, res) => {
             });
         }
 
-        // Check if payment method is points
+        // Get user
         const User = (await import('../models/User.js')).default;
         const user = await User.findById(user_id);
 
-        if (payment_method === 'points') {
-            const POINTS_REQUIRED = 500; // 500 points = ₹100 entry fee
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
 
-            if (user.points < POINTS_REQUIRED) {
+        // Validate payment method based on campaign type
+        if (campaign.campaign_type === 'premium') {
+            // Premium campaigns: Must pay money ONLY, points NOT allowed (protect revenue!)
+            if (payment_method === 'points') {
                 return res.status(400).json({
                     success: false,
-                    message: `Insufficient points. You need ${POINTS_REQUIRED} points but have only ${user.points} points.`
+                    message: 'This is a premium campaign. Points cannot be used. Please pay the entry fee with money.'
                 });
             }
+            // Must pay with rupees - validate payment here (PhonePe/Razorpay integration)
+        } else if (campaign.campaign_type === 'point-based') {
+            // Point-based campaigns: Can pay with money OR use points (user's choice)
+            if (payment_method === 'points') {
+                const POINTS_REQUIRED = campaign.points_required || 500;
 
-            // Deduct points
-            user.points -= POINTS_REQUIRED;
-            await user.save();
+                if (user.points < POINTS_REQUIRED) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Insufficient points. You need ${POINTS_REQUIRED} points but have only ${user.points} points. Pay ₹${campaign.entry_fee.amount} instead!`
+                    });
+                }
 
-            console.log(`✅ Deducted ${POINTS_REQUIRED} points from user ${user.username || user.mobile_number}`);
+                // Deduct points
+                user.points -= POINTS_REQUIRED;
+                await user.save();
+
+                console.log(`✅ Deducted ${POINTS_REQUIRED} points from user ${user.username || user.mobile_number}`);
+            }
+            // If payment_method is 'rupees', they pay with money instead
         }
 
         // Create submission
@@ -515,6 +575,18 @@ export const submitArtwork = async (req, res) => {
         campaign.current_participants += 1;
         await campaign.save();
 
+        // 🎉 REWARD SYSTEM: Award 100 points for participation (NO LOSERS!)
+        const PARTICIPATION_POINTS = 100;
+        user.points += PARTICIPATION_POINTS;
+        user.contests_participated += 1;
+
+        // Check if user just earned enough for free entry
+        const pointsBeforeReward = user.points - PARTICIPATION_POINTS;
+        const canNowJoinFree = user.points >= 500 && pointsBeforeReward < 500;
+
+        await user.save();
+        console.log(`🎁 Awarded ${PARTICIPATION_POINTS} points to ${user.username || user.mobile_number}. Total: ${user.points} points, Contests: ${user.contests_participated}`);
+
         // Award referral points if this is user's first campaign
         try {
             const referralResult = await awardReferralPoints(user_id);
@@ -529,7 +601,15 @@ export const submitArtwork = async (req, res) => {
         res.status(201).json({
             success: true,
             message: 'Artwork submitted successfully',
-            submission
+            submission,
+            rewards: {
+                points_earned: PARTICIPATION_POINTS,
+                total_points: user.points,
+                contests_participated: user.contests_participated,
+                can_join_free: user.points >= 500,
+                just_unlocked_free_entry: canNowJoinFree,
+                points_to_next_free: user.points >= 500 ? 0 : 500 - user.points
+            }
         });
     } catch (error) {
         console.error('Submit Artwork Error:', error);

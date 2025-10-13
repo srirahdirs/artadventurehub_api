@@ -23,6 +23,12 @@ const campaignSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    campaign_type: {
+        type: String,
+        enum: ['premium', 'point-based'], // premium: must pay money only, point-based: pay money OR use points
+        default: 'premium',
+        required: true
+    },
     entry_fee: {
         amount: {
             type: Number,
@@ -34,6 +40,11 @@ const campaignSchema = new mongoose.Schema({
             enum: ['rupees', 'points'], // Payment type: cash or gamification points
             default: 'rupees'
         }
+    },
+    points_required: {
+        type: Number,
+        default: 500, // Points needed to join point-based campaigns
+        min: 0
     },
     prizes: {
         first_prize: {

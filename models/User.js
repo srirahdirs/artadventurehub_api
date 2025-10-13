@@ -50,6 +50,11 @@ const userSchema = new mongoose.Schema({
         default: 0,
         min: 0
     },
+    contests_participated: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
     total_referrals: {
         type: Number,
         default: 0
