@@ -575,17 +575,9 @@ export const submitArtwork = async (req, res) => {
         campaign.current_participants += 1;
         await campaign.save();
 
-        // 🎉 REWARD SYSTEM: Award 100 points for participation (NO LOSERS!)
-        const PARTICIPATION_POINTS = 100;
-        user.points += PARTICIPATION_POINTS;
+        // Increment user's contests participated count
         user.contests_participated += 1;
-
-        // Check if user just earned enough for free entry
-        const pointsBeforeReward = user.points - PARTICIPATION_POINTS;
-        const canNowJoinFree = user.points >= 500 && pointsBeforeReward < 500;
-
         await user.save();
-        console.log(`🎁 Awarded ${PARTICIPATION_POINTS} points to ${user.username || user.mobile_number}. Total: ${user.points} points, Contests: ${user.contests_participated}`);
 
         // Award referral points if this is user's first campaign
         try {
@@ -602,14 +594,7 @@ export const submitArtwork = async (req, res) => {
             success: true,
             message: 'Artwork submitted successfully',
             submission,
-            rewards: {
-                points_earned: PARTICIPATION_POINTS,
-                total_points: user.points,
-                contests_participated: user.contests_participated,
-                can_join_free: user.points >= 500,
-                just_unlocked_free_entry: canNowJoinFree,
-                points_to_next_free: user.points >= 500 ? 0 : 500 - user.points
-            }
+            note: 'Points will be awarded to non-winning participants after prize distribution'
         });
     } catch (error) {
         console.error('Submit Artwork Error:', error);
@@ -629,6 +614,13 @@ export const getUserSubmissions = async (req, res) => {
         const submissions = await CampaignSubmission.find({ user_id })
             .populate('campaign_id')
             .sort({ submitted_at: -1 });
+
+        console.log(`📊 User ${user_id} submissions:`, submissions.map(s => ({
+            id: s._id,
+            status: s.status,
+            prize_won: s.prize_won,
+            campaign: s.campaign_id?.name
+        })));
 
         res.json({
             success: true,
@@ -1267,6 +1259,165 @@ export const getPublicSubmission = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error fetching submission',
+            error: error.message
+        });
+    }
+};
+
+// Distribute prizes and award points to non-winners (Admin)
+export const distributePrizes = async (req, res) => {
+    try {
+        const { campaign_id, first_winner_id, second_winner_id } = req.body;
+
+        if (!campaign_id || !first_winner_id || !second_winner_id) {
+            return res.status(400).json({
+                success: false,
+                message: 'Campaign ID, first winner ID, and second winner ID are required'
+            });
+        }
+
+        // Get campaign
+        const campaign = await Campaign.findById(campaign_id);
+        if (!campaign) {
+            return res.status(404).json({
+                success: false,
+                message: 'Campaign not found'
+            });
+        }
+
+        // Get all submissions for this campaign
+        const submissions = await CampaignSubmission.find({ campaign_id });
+        if (submissions.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No submissions found for this campaign'
+            });
+        }
+
+        // Get User model
+        const User = (await import('../models/User.js')).default;
+        const PARTICIPATION_POINTS = 100;
+
+        // Award prizes to winners
+        console.log(`🏆 Setting first winner: ${first_winner_id}`);
+        const firstWinner = await CampaignSubmission.findByIdAndUpdate(
+            first_winner_id,
+            {
+                status: 'winner',
+                prize_won: {
+                    amount: campaign.prizes.first_prize,
+                    position: 'first'
+                },
+                admin_notes: 'First Prize Winner'
+            },
+            { new: true }
+        );
+
+        console.log(`🥈 Setting second winner: ${second_winner_id}`);
+        const secondWinner = await CampaignSubmission.findByIdAndUpdate(
+            second_winner_id,
+            {
+                status: 'runner_up',
+                prize_won: {
+                    amount: campaign.prizes.second_prize,
+                    position: 'second'
+                },
+                admin_notes: 'Second Prize Winner'
+            },
+            { new: true }
+        );
+
+        console.log(`✅ First winner updated:`, firstWinner ? 'SUCCESS' : 'FAILED');
+        console.log(`✅ Second winner updated:`, secondWinner ? 'SUCCESS' : 'FAILED');
+
+        if (!firstWinner || !secondWinner) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid winner IDs'
+            });
+        }
+
+        // Add prize money to winners' wallets
+        const firstWinnerUser = await User.findById(firstWinner.user_id);
+        const secondWinnerUser = await User.findById(secondWinner.user_id);
+
+        if (firstWinnerUser) {
+            // Initialize wallet if it doesn't exist
+            if (!firstWinnerUser.wallet) {
+                firstWinnerUser.wallet = { balance: 0, total_earned: 0, total_withdrawn: 0 };
+            }
+            firstWinnerUser.wallet.balance = (firstWinnerUser.wallet.balance || 0) + campaign.prizes.first_prize;
+            firstWinnerUser.wallet.total_earned = (firstWinnerUser.wallet.total_earned || 0) + campaign.prizes.first_prize;
+            await firstWinnerUser.save();
+            console.log(`💰 Added ₹${campaign.prizes.first_prize} to first winner's wallet. New balance: ₹${firstWinnerUser.wallet.balance}`);
+        }
+
+        if (secondWinnerUser) {
+            // Initialize wallet if it doesn't exist
+            if (!secondWinnerUser.wallet) {
+                secondWinnerUser.wallet = { balance: 0, total_earned: 0, total_withdrawn: 0 };
+            }
+            secondWinnerUser.wallet.balance = (secondWinnerUser.wallet.balance || 0) + campaign.prizes.second_prize;
+            secondWinnerUser.wallet.total_earned = (secondWinnerUser.wallet.total_earned || 0) + campaign.prizes.second_prize;
+            await secondWinnerUser.save();
+            console.log(`💰 Added ₹${campaign.prizes.second_prize} to second winner's wallet. New balance: ₹${secondWinnerUser.wallet.balance}`);
+        }
+
+        // Award points to non-winning participants
+        const nonWinners = submissions.filter(sub =>
+            sub._id.toString() !== first_winner_id &&
+            sub._id.toString() !== second_winner_id
+        );
+
+        let pointsAwarded = 0;
+        let participantsUpdated = 0;
+
+        for (const submission of nonWinners) {
+            const user = await User.findById(submission.user_id);
+            if (user) {
+                user.points = (user.points || 0) + PARTICIPATION_POINTS;
+                await user.save();
+
+                pointsAwarded += PARTICIPATION_POINTS;
+                participantsUpdated += 1;
+
+                console.log(`🎁 Awarded ${PARTICIPATION_POINTS} points to ${user.username || user.mobile_number} (non-winner). New points: ${user.points}`);
+            }
+        }
+
+        // Update campaign status to completed
+        campaign.status = 'completed';
+        await campaign.save();
+
+        res.json({
+            success: true,
+            message: 'Prizes distributed successfully',
+            results: {
+                first_winner: {
+                    id: firstWinner._id,
+                    user_id: firstWinner.user_id,
+                    prize_amount: campaign.prizes.first_prize,
+                    wallet_balance: firstWinnerUser?.wallet?.balance || 0
+                },
+                second_winner: {
+                    id: secondWinner._id,
+                    user_id: secondWinner.user_id,
+                    prize_amount: campaign.prizes.second_prize,
+                    wallet_balance: secondWinnerUser?.wallet?.balance || 0
+                },
+                participation_rewards: {
+                    non_winners_count: participantsUpdated,
+                    points_awarded_per_person: PARTICIPATION_POINTS,
+                    total_points_awarded: pointsAwarded
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Distribute Prizes Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error distributing prizes',
             error: error.message
         });
     }

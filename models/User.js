@@ -62,6 +62,54 @@ const userSchema = new mongoose.Schema({
     successful_referrals: {
         type: Number,
         default: 0
+    },
+    // Wallet System
+    wallet: {
+        balance: {
+            type: Number,
+            default: 0,
+            min: 0
+        },
+        total_earned: {
+            type: Number,
+            default: 0,
+            min: 0
+        },
+        total_withdrawn: {
+            type: Number,
+            default: 0,
+            min: 0
+        }
+    },
+    // Withdrawal Details
+    withdrawal_details: {
+        upi_id: {
+            type: String,
+            trim: true,
+            default: ''
+        },
+        bank_details: {
+            account_holder_name: {
+                type: String,
+                trim: true,
+                default: ''
+            },
+            account_number: {
+                type: String,
+                trim: true,
+                default: ''
+            },
+            ifsc_code: {
+                type: String,
+                trim: true,
+                default: ''
+            },
+            bank_name: {
+                type: String,
+                trim: true,
+                default: ''
+            }
+        }
     }
 }, {
     timestamps: true // This will add createdAt and updatedAt fields

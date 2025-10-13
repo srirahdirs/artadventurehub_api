@@ -9,6 +9,7 @@ import {
     updateCampaignStatus,
     rateSubmission,
     getCampaignStats,
+    distributePrizes,
     // User operations
     getActiveCampaigns,
     submitArtwork,
@@ -46,6 +47,7 @@ router.patch('/admin/:id/status', updateCampaignStatus);
 
 // Submission management
 router.put('/admin/submission/:id/rate', rateSubmission);
+router.post('/admin/distribute-prizes', distributePrizes);
 
 // ============ USER/PUBLIC ROUTES ============
 // View campaigns

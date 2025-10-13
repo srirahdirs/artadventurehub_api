@@ -6,10 +6,6 @@ const campaignSchema = new mongoose.Schema({
         required: true,
         trim: true
     },
-    description: {
-        type: String,
-        default: ''
-    },
     reference_image: {
         type: String, // URL or path to the image users need to paint
         required: true

@@ -8,6 +8,7 @@ import campaignRoutes from './routes/campaignRoutes.js';
 import uploadRoutes from './routes/uploadRoutes.js';
 import contactRoutes from './routes/contactRoutes.js';
 import referralRoutes from './routes/referralRoutes.js';
+import withdrawalRoutes from './routes/withdrawalRoutes.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -87,24 +88,33 @@ app.get('/download/:filename', (req, res) => {
 });
 
 // ✅ MongoDB Connection with proper options
-mongoose
-    .connect(process.env.MONGO_URI, {
-        serverSelectionTimeoutMS: 30000, // 30 seconds
-        socketTimeoutMS: 45000, // 45 seconds
-        bufferCommands: false,
-        maxPoolSize: 10,
-        minPoolSize: 5,
-        maxIdleTimeMS: 30000,
-        connectTimeoutMS: 30000,
-    })
-    .then(() => console.log('✅ Connected to MongoDB'))
-    .catch((err) => console.error('❌ MongoDB connection error:', err));
+const connectDB = async () => {
+    try {
+        await mongoose.connect(process.env.MONGO_URI, {
+            serverSelectionTimeoutMS: 30000, // 30 seconds
+            socketTimeoutMS: 45000, // 45 seconds
+            bufferCommands: true, // Enable buffering to prevent connection issues
+            maxPoolSize: 10,
+            minPoolSize: 5,
+            maxIdleTimeMS: 30000,
+            connectTimeoutMS: 30000,
+        });
+        console.log('✅ Connected to MongoDB');
+    } catch (err) {
+        console.error('❌ MongoDB connection error:', err);
+        process.exit(1);
+    }
+};
+
+// Connect to MongoDB before starting server
+connectDB();
 
 // ✅ Routes
 app.use('/api/users', userRoutes);
 app.use('/api/campaigns', campaignRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/referrals', referralRoutes);
+app.use('/api/withdrawals', withdrawalRoutes);
 app.use('/api', uploadRoutes);
 
 // ✅ MSG91 Configuration (keep these in .env for safety)
