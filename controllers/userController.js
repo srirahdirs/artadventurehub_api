@@ -638,6 +638,8 @@ export const getUserProfile = async (req, res) => {
                 status: user.status,
                 points: user.points,
                 referral_code: user.referral_code,
+                wallet: user.wallet || { balance: 0, total_earned: 0, total_withdrawn: 0 },
+                withdrawal_details: user.withdrawal_details || { upi_id: '', bank_details: {} },
                 total_referrals: user.total_referrals,
                 successful_referrals: user.successful_referrals,
                 createdAt: user.createdAt,

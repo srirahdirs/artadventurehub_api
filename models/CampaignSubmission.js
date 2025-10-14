@@ -51,10 +51,18 @@ const campaignSubmissionSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    voted_by: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }],
     likes: {
         type: Number,
         default: 0
     },
+    liked_by: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }],
     admin_rating: {
         type: Number,
         min: 0,

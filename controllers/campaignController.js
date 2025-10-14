@@ -869,7 +869,19 @@ export const voteSubmission = async (req, res) => {
             });
         }
 
-        // Increment votes
+        // Check if user already voted
+        if (submission.voted_by && submission.voted_by.includes(user_id)) {
+            return res.status(400).json({
+                success: false,
+                message: 'You have already voted for this submission'
+            });
+        }
+
+        // Add user to voted_by array and increment votes
+        if (!submission.voted_by) {
+            submission.voted_by = [];
+        }
+        submission.voted_by.push(user_id);
         submission.votes += 1;
         await submission.save();
 
@@ -909,9 +921,13 @@ export const unvoteSubmission = async (req, res) => {
             });
         }
 
-        // Decrement votes (ensure it doesn't go below 0)
-        submission.votes = Math.max(0, submission.votes - 1);
-        await submission.save();
+        // Remove user from voted_by array
+        if (submission.voted_by && submission.voted_by.includes(user_id)) {
+            submission.voted_by = submission.voted_by.filter(id => id.toString() !== user_id.toString());
+            // Decrement votes (ensure it doesn't go below 0)
+            submission.votes = Math.max(0, submission.votes - 1);
+            await submission.save();
+        }
 
         res.json({
             success: true,
@@ -1418,6 +1434,78 @@ export const distributePrizes = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error distributing prizes',
+            error: error.message
+        });
+    }
+};
+
+// Get user's votes (to prevent duplicate voting after page refresh)
+export const getUserVotes = async (req, res) => {
+    try {
+        const { user_id } = req.params;
+
+        if (!user_id) {
+            return res.status(400).json({
+                success: false,
+                message: 'User ID is required'
+            });
+        }
+
+        // Find all submissions where this user has voted
+        const votedSubmissions = await CampaignSubmission.find({
+            voted_by: user_id
+        }).select('_id');
+
+        // Return array of voted submission IDs
+        const votes = votedSubmissions.map(sub => ({
+            submission_id: sub._id
+        }));
+
+        res.json({
+            success: true,
+            votes
+        });
+    } catch (error) {
+        console.error('Get User Votes Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching user votes',
+            error: error.message
+        });
+    }
+};
+
+// Get user's liked comments (to show correct like state after page refresh)
+export const getUserLikedComments = async (req, res) => {
+    try {
+        const { user_id } = req.params;
+
+        if (!user_id) {
+            return res.status(400).json({
+                success: false,
+                message: 'User ID is required'
+            });
+        }
+
+        // Find all comments where this user has liked
+        const likedComments = await Comment.find({
+            liked_by: user_id
+        }).select('_id');
+
+        // Return array of liked comment IDs
+        const comments = likedComments.map(comment => ({
+            comment_id: comment._id
+        }));
+
+        res.json({
+            success: true,
+            comments
+        });
+    } catch (error) {
+        console.error('Get User Liked Comments Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching user liked comments',
             error: error.message
         });
     }

@@ -36,6 +36,17 @@ export const requestWithdrawal = async (req, res) => {
             });
         }
 
+        // Deduct amount from wallet immediately
+        user.wallet.balance -= amount;
+
+        // Update user's withdrawal details for future use
+        if (withdrawal_method === 'upi') {
+            user.withdrawal_details.upi_id = withdrawal_details.upi_id;
+        } else if (withdrawal_method === 'bank') {
+            user.withdrawal_details.bank_details = withdrawal_details.bank_details;
+        }
+        await user.save();
+
         // Create withdrawal request
         const withdrawal = new Withdrawal({
             user_id,
@@ -45,14 +56,6 @@ export const requestWithdrawal = async (req, res) => {
         });
 
         await withdrawal.save();
-
-        // Update user's withdrawal details for future use
-        if (withdrawal_method === 'upi') {
-            user.withdrawal_details.upi_id = withdrawal_details.upi_id;
-        } else if (withdrawal_method === 'bank') {
-            user.withdrawal_details.bank_details = withdrawal_details.bank_details;
-        }
-        await user.save();
 
         res.status(201).json({
             success: true,
@@ -181,6 +184,72 @@ export const getAllWithdrawals = async (req, res) => {
     }
 };
 
+// User: Cancel/Reverse pending withdrawal
+export const cancelWithdrawal = async (req, res) => {
+    try {
+        const { withdrawal_id } = req.params;
+        const { user_id } = req.body;
+
+        const withdrawal = await Withdrawal.findById(withdrawal_id);
+
+        if (!withdrawal) {
+            return res.status(404).json({
+                success: false,
+                message: 'Withdrawal request not found'
+            });
+        }
+
+        // Check if user owns this withdrawal
+        if (withdrawal.user_id.toString() !== user_id) {
+            return res.status(403).json({
+                success: false,
+                message: 'Unauthorized to cancel this withdrawal'
+            });
+        }
+
+        // Check if withdrawal is still pending
+        if (withdrawal.status !== 'pending') {
+            return res.status(400).json({
+                success: false,
+                message: `Cannot cancel ${withdrawal.status} withdrawal`
+            });
+        }
+
+        // Refund amount back to wallet
+        const user = await User.findById(user_id);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        user.wallet.balance += withdrawal.amount;
+        await user.save();
+
+        // Update withdrawal status to cancelled
+        withdrawal.status = 'cancelled';
+        withdrawal.processed_at = new Date();
+        withdrawal.admin_notes = 'Cancelled by user';
+        await withdrawal.save();
+
+        res.json({
+            success: true,
+            message: 'Withdrawal cancelled successfully. Amount refunded to wallet.',
+            refunded_amount: withdrawal.amount,
+            new_balance: user.wallet.balance
+        });
+
+    } catch (error) {
+        console.error('Cancel Withdrawal Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error cancelling withdrawal',
+            error: error.message
+        });
+    }
+};
+
 // Admin: Process withdrawal
 export const processWithdrawal = async (req, res) => {
     try {
@@ -216,12 +285,15 @@ export const processWithdrawal = async (req, res) => {
         withdrawal.admin_notes = admin_notes || '';
         withdrawal.processed_at = new Date();
 
+        const user = withdrawal.user_id;
+
         if (status === 'rejected') {
             withdrawal.rejection_reason = rejection_reason || 'Request rejected';
+            // Refund amount back to wallet on rejection
+            user.wallet.balance += withdrawal.amount;
+            await user.save();
         } else if (status === 'completed') {
-            // Deduct amount from user's wallet
-            const user = withdrawal.user_id;
-            user.wallet.balance -= withdrawal.amount;
+            // Amount already deducted, just update total_withdrawn
             user.wallet.total_withdrawn += withdrawal.amount;
             await user.save();
         }

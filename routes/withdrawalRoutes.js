@@ -4,7 +4,8 @@ import {
     getUserWithdrawals,
     updateWithdrawalDetails,
     getAllWithdrawals,
-    processWithdrawal
+    processWithdrawal,
+    cancelWithdrawal
 } from '../controllers/withdrawalController.js';
 
 const router = express.Router();
@@ -13,6 +14,7 @@ const router = express.Router();
 router.post('/request', requestWithdrawal);
 router.get('/user/:user_id', getUserWithdrawals);
 router.put('/user/:user_id/details', updateWithdrawalDetails);
+router.put('/:withdrawal_id/cancel', cancelWithdrawal);
 
 // Admin routes
 router.get('/admin/all', getAllWithdrawals);
