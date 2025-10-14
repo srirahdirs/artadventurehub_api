@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import Campaign from '../models/Campaign.js';
 import CampaignSubmission from '../models/CampaignSubmission.js';
 import Comment from '../models/Comment.js';
+import WalletTransaction from '../models/WalletTransaction.js';
 import { awardReferralPoints } from './referralController.js';
 
 // ============ ADMIN OPERATIONS ============
@@ -535,9 +536,41 @@ export const submitArtwork = async (req, res) => {
                     message: 'This is a premium campaign. Points cannot be used. Please pay the entry fee with money.'
                 });
             }
-            // Must pay with rupees - validate payment here (PhonePe/Razorpay integration)
+            // Must pay with wallet - validate balance
+            if (payment_method === 'wallet') {
+                const entryFee = campaign.entry_fee.amount;
+                if (!user.wallet || user.wallet.balance < entryFee) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Insufficient wallet balance. You need ₹${entryFee} but have only ₹${user.wallet?.balance || 0}. Please add money to wallet.`
+                    });
+                }
+
+                // Record balance before transaction
+                const balanceBefore = user.wallet.balance;
+
+                // Deduct from wallet
+                user.wallet.balance -= entryFee;
+                await user.save();
+
+                // Create wallet transaction record
+                await WalletTransaction.create({
+                    user_id,
+                    type: 'contest_entry',
+                    amount: entryFee,
+                    balance_before: balanceBefore,
+                    balance_after: user.wallet.balance,
+                    description: `Contest entry fee for "${campaign.name}"`,
+                    reference_id: campaign_id.toString(),
+                    reference_type: 'campaign',
+                    payment_method: 'wallet',
+                    status: 'completed'
+                });
+
+                console.log(`✅ Deducted ₹${entryFee} from wallet for user ${user.username || user.mobile_number}`);
+            }
         } else if (campaign.campaign_type === 'point-based') {
-            // Point-based campaigns: Can pay with money OR use points (user's choice)
+            // Point-based campaigns: Can pay with wallet OR use points (user's choice)
             if (payment_method === 'points') {
                 const POINTS_REQUIRED = campaign.points_required || 500;
 
@@ -553,8 +586,39 @@ export const submitArtwork = async (req, res) => {
                 await user.save();
 
                 console.log(`✅ Deducted ${POINTS_REQUIRED} points from user ${user.username || user.mobile_number}`);
+            } else if (payment_method === 'wallet') {
+                // Pay with wallet
+                const entryFee = campaign.entry_fee.amount;
+                if (!user.wallet || user.wallet.balance < entryFee) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Insufficient wallet balance. You need ₹${entryFee} but have only ₹${user.wallet?.balance || 0}. Please add money to wallet.`
+                    });
+                }
+
+                // Record balance before transaction
+                const balanceBefore = user.wallet.balance;
+
+                // Deduct from wallet
+                user.wallet.balance -= entryFee;
+                await user.save();
+
+                // Create wallet transaction record
+                await WalletTransaction.create({
+                    user_id,
+                    type: 'contest_entry',
+                    amount: entryFee,
+                    balance_before: balanceBefore,
+                    balance_after: user.wallet.balance,
+                    description: `Contest entry fee for "${campaign.name}" (Point-based campaign)`,
+                    reference_id: campaign_id.toString(),
+                    reference_type: 'campaign',
+                    payment_method: 'wallet',
+                    status: 'completed'
+                });
+
+                console.log(`✅ Deducted ₹${entryFee} from wallet for user ${user.username || user.mobile_number}`);
             }
-            // If payment_method is 'rupees', they pay with money instead
         }
 
         // Create submission
@@ -1362,9 +1426,27 @@ export const distributePrizes = async (req, res) => {
             if (!firstWinnerUser.wallet) {
                 firstWinnerUser.wallet = { balance: 0, total_earned: 0, total_withdrawn: 0 };
             }
-            firstWinnerUser.wallet.balance = (firstWinnerUser.wallet.balance || 0) + campaign.prizes.first_prize;
+
+            // Record balance before prize
+            const balanceBefore = firstWinnerUser.wallet.balance;
+
+            firstWinnerUser.wallet.balance = balanceBefore + campaign.prizes.first_prize;
             firstWinnerUser.wallet.total_earned = (firstWinnerUser.wallet.total_earned || 0) + campaign.prizes.first_prize;
             await firstWinnerUser.save();
+
+            // Create wallet transaction record for prize
+            await WalletTransaction.create({
+                user_id: firstWinnerUser._id,
+                type: 'prize_won',
+                amount: campaign.prizes.first_prize,
+                balance_before: balanceBefore,
+                balance_after: firstWinnerUser.wallet.balance,
+                description: `First Prize Winner - "${campaign.name}"`,
+                reference_id: campaign_id.toString(),
+                reference_type: 'campaign',
+                status: 'completed'
+            });
+
             console.log(`💰 Added ₹${campaign.prizes.first_prize} to first winner's wallet. New balance: ₹${firstWinnerUser.wallet.balance}`);
         }
 
@@ -1373,9 +1455,27 @@ export const distributePrizes = async (req, res) => {
             if (!secondWinnerUser.wallet) {
                 secondWinnerUser.wallet = { balance: 0, total_earned: 0, total_withdrawn: 0 };
             }
-            secondWinnerUser.wallet.balance = (secondWinnerUser.wallet.balance || 0) + campaign.prizes.second_prize;
+
+            // Record balance before prize
+            const balanceBefore = secondWinnerUser.wallet.balance;
+
+            secondWinnerUser.wallet.balance = balanceBefore + campaign.prizes.second_prize;
             secondWinnerUser.wallet.total_earned = (secondWinnerUser.wallet.total_earned || 0) + campaign.prizes.second_prize;
             await secondWinnerUser.save();
+
+            // Create wallet transaction record for prize
+            await WalletTransaction.create({
+                user_id: secondWinnerUser._id,
+                type: 'prize_won',
+                amount: campaign.prizes.second_prize,
+                balance_before: balanceBefore,
+                balance_after: secondWinnerUser.wallet.balance,
+                description: `Second Prize Winner - "${campaign.name}"`,
+                reference_id: campaign_id.toString(),
+                reference_type: 'campaign',
+                status: 'completed'
+            });
+
             console.log(`💰 Added ₹${campaign.prizes.second_prize} to second winner's wallet. New balance: ₹${secondWinnerUser.wallet.balance}`);
         }
 

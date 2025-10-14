@@ -31,8 +31,8 @@ const campaignSubmissionSchema = new mongoose.Schema({
     },
     payment_method: {
         type: String,
-        enum: ['rupees', 'points'],
-        default: 'rupees'
+        enum: ['rupees', 'points', 'wallet'],
+        default: 'wallet'
     },
     payment_amount: {
         type: Number,

@@ -1,5 +1,6 @@
 import Withdrawal from '../models/Withdrawal.js';
 import User from '../models/User.js';
+import WalletTransaction from '../models/WalletTransaction.js';
 
 // Request withdrawal
 export const requestWithdrawal = async (req, res) => {
@@ -36,6 +37,9 @@ export const requestWithdrawal = async (req, res) => {
             });
         }
 
+        // Record balance before transaction
+        const balanceBefore = user.wallet.balance;
+
         // Deduct amount from wallet immediately
         user.wallet.balance -= amount;
 
@@ -56,6 +60,20 @@ export const requestWithdrawal = async (req, res) => {
         });
 
         await withdrawal.save();
+
+        // Create wallet transaction record
+        await WalletTransaction.create({
+            user_id,
+            type: 'withdrawal',
+            amount: amount,
+            balance_before: balanceBefore,
+            balance_after: user.wallet.balance,
+            description: `Withdrawal request via ${withdrawal_method === 'upi' ? 'UPI' : 'Bank Transfer'}`,
+            reference_id: withdrawal._id.toString(),
+            reference_type: 'withdrawal',
+            payment_method: withdrawal_method === 'upi' ? 'upi' : 'bank_transfer',
+            status: 'pending'
+        });
 
         res.status(201).json({
             success: true,
@@ -224,6 +242,9 @@ export const cancelWithdrawal = async (req, res) => {
             });
         }
 
+        // Record balance before refund
+        const balanceBefore = user.wallet.balance;
+
         user.wallet.balance += withdrawal.amount;
         await user.save();
 
@@ -232,6 +253,20 @@ export const cancelWithdrawal = async (req, res) => {
         withdrawal.processed_at = new Date();
         withdrawal.admin_notes = 'Cancelled by user';
         await withdrawal.save();
+
+        // Create wallet transaction record for refund
+        await WalletTransaction.create({
+            user_id,
+            type: 'refund',
+            amount: withdrawal.amount,
+            balance_before: balanceBefore,
+            balance_after: user.wallet.balance,
+            description: `Withdrawal cancellation refund`,
+            reference_id: withdrawal_id,
+            reference_type: 'withdrawal',
+            payment_method: withdrawal.withdrawal_method === 'upi' ? 'upi' : 'bank_transfer',
+            status: 'completed'
+        });
 
         res.json({
             success: true,
@@ -289,13 +324,37 @@ export const processWithdrawal = async (req, res) => {
 
         if (status === 'rejected') {
             withdrawal.rejection_reason = rejection_reason || 'Request rejected';
+
+            // Record balance before refund
+            const balanceBefore = user.wallet.balance;
+
             // Refund amount back to wallet on rejection
             user.wallet.balance += withdrawal.amount;
             await user.save();
+
+            // Create wallet transaction record for refund
+            await WalletTransaction.create({
+                user_id: user._id,
+                type: 'refund',
+                amount: withdrawal.amount,
+                balance_before: balanceBefore,
+                balance_after: user.wallet.balance,
+                description: `Withdrawal rejection refund - ${rejection_reason || 'Request rejected'}`,
+                reference_id: withdrawal_id,
+                reference_type: 'withdrawal',
+                payment_method: withdrawal.withdrawal_method === 'upi' ? 'upi' : 'bank_transfer',
+                status: 'completed'
+            });
         } else if (status === 'completed') {
             // Amount already deducted, just update total_withdrawn
             user.wallet.total_withdrawn += withdrawal.amount;
             await user.save();
+
+            // Update the original withdrawal transaction status
+            await WalletTransaction.findOneAndUpdate(
+                { reference_id: withdrawal_id, reference_type: 'withdrawal' },
+                { status: 'completed' }
+            );
         }
 
         await withdrawal.save();
