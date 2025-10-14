@@ -32,7 +32,8 @@ const allowedOrigins = [
     'http://localhost:3033',
     'http://localhost:5000',
     'https://artadventurehub.com',
-    'https://www.artadventurehub.com'
+    'https://www.artadventurehub.com',
+    'https://admin.artadventurehub.com'
 ];
 
 // ✅ Global CORS Middleware
