@@ -63,9 +63,21 @@ const userSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
-    // Wallet System
+    // Wallet System (Two-Balance System)
     wallet: {
-        balance: {
+        deposit_balance: {
+            type: Number,
+            default: 0,
+            min: 0
+            // Non-withdrawable - used only for contest entries
+        },
+        winning_balance: {
+            type: Number,
+            default: 0,
+            min: 0
+            // Withdrawable - earned from contests/prizes
+        },
+        total_deposited: {
             type: Number,
             default: 0,
             min: 0

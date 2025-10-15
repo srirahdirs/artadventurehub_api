@@ -23,10 +23,24 @@ export const requestWithdrawal = async (req, res) => {
             });
         }
 
-        if (user.wallet.balance < amount) {
+        // Initialize wallet if it doesn't exist
+        if (!user.wallet) {
+            user.wallet = {
+                deposit_balance: 0,
+                winning_balance: 0,
+                total_deposited: 0,
+                total_earned: 0,
+                total_withdrawn: 0
+            };
+        }
+
+        const winningBalance = user.wallet.winning_balance || 0;
+
+        // ✅ KEY CHANGE: Only winning_balance is withdrawable, NOT deposit_balance
+        if (winningBalance < amount) {
             return res.status(400).json({
                 success: false,
-                message: `Insufficient wallet balance. Available: ₹${user.wallet.balance}`
+                message: `Insufficient withdrawable balance. Available for withdrawal: ₹${winningBalance} (Only winnings can be withdrawn, deposits are non-withdrawable)`
             });
         }
 
@@ -37,11 +51,11 @@ export const requestWithdrawal = async (req, res) => {
             });
         }
 
-        // Record balance before transaction
-        const balanceBefore = user.wallet.balance;
+        // Record total balance before transaction
+        const totalBalanceBefore = (user.wallet.deposit_balance || 0) + (user.wallet.winning_balance || 0);
 
-        // Deduct amount from wallet immediately
-        user.wallet.balance -= amount;
+        // Deduct amount from WINNING balance only
+        user.wallet.winning_balance -= amount;
 
         // Update user's withdrawal details for future use
         if (withdrawal_method === 'upi') {
@@ -61,14 +75,16 @@ export const requestWithdrawal = async (req, res) => {
 
         await withdrawal.save();
 
+        const totalBalanceAfter = (user.wallet.deposit_balance || 0) + user.wallet.winning_balance;
+
         // Create wallet transaction record
         await WalletTransaction.create({
             user_id,
             type: 'withdrawal',
             amount: amount,
-            balance_before: balanceBefore,
-            balance_after: user.wallet.balance,
-            description: `Withdrawal request via ${withdrawal_method === 'upi' ? 'UPI' : 'Bank Transfer'}`,
+            balance_before: totalBalanceBefore,
+            balance_after: totalBalanceAfter,
+            description: `Withdrawal from winnings via ${withdrawal_method === 'upi' ? 'UPI' : 'Bank Transfer'}`,
             reference_id: withdrawal._id.toString(),
             reference_type: 'withdrawal',
             payment_method: withdrawal_method === 'upi' ? 'upi' : 'bank_transfer',
@@ -242,11 +258,25 @@ export const cancelWithdrawal = async (req, res) => {
             });
         }
 
-        // Record balance before refund
-        const balanceBefore = user.wallet.balance;
+        // Initialize wallet if needed
+        if (!user.wallet) {
+            user.wallet = {
+                deposit_balance: 0,
+                winning_balance: 0,
+                total_deposited: 0,
+                total_earned: 0,
+                total_withdrawn: 0
+            };
+        }
 
-        user.wallet.balance += withdrawal.amount;
+        // Record total balance before refund
+        const totalBalanceBefore = (user.wallet.deposit_balance || 0) + (user.wallet.winning_balance || 0);
+
+        // Refund to WINNING balance (where it was deducted from)
+        user.wallet.winning_balance = (user.wallet.winning_balance || 0) + withdrawal.amount;
         await user.save();
+
+        const totalBalanceAfter = (user.wallet.deposit_balance || 0) + user.wallet.winning_balance;
 
         // Update withdrawal status to cancelled
         withdrawal.status = 'cancelled';
@@ -259,9 +289,9 @@ export const cancelWithdrawal = async (req, res) => {
             user_id,
             type: 'refund',
             amount: withdrawal.amount,
-            balance_before: balanceBefore,
-            balance_after: user.wallet.balance,
-            description: `Withdrawal cancellation refund`,
+            balance_before: totalBalanceBefore,
+            balance_after: totalBalanceAfter,
+            description: `Withdrawal cancellation refund (back to winning balance)`,
             reference_id: withdrawal_id,
             reference_type: 'withdrawal',
             payment_method: withdrawal.withdrawal_method === 'upi' ? 'upi' : 'bank_transfer',
@@ -270,9 +300,10 @@ export const cancelWithdrawal = async (req, res) => {
 
         res.json({
             success: true,
-            message: 'Withdrawal cancelled successfully. Amount refunded to wallet.',
+            message: 'Withdrawal cancelled successfully. Amount refunded to winning balance.',
             refunded_amount: withdrawal.amount,
-            new_balance: user.wallet.balance
+            winning_balance: user.wallet.winning_balance,
+            total_balance: totalBalanceAfter
         });
 
     } catch (error) {
@@ -325,20 +356,33 @@ export const processWithdrawal = async (req, res) => {
         if (status === 'rejected') {
             withdrawal.rejection_reason = rejection_reason || 'Request rejected';
 
-            // Record balance before refund
-            const balanceBefore = user.wallet.balance;
+            // Initialize wallet if needed
+            if (!user.wallet) {
+                user.wallet = {
+                    deposit_balance: 0,
+                    winning_balance: 0,
+                    total_deposited: 0,
+                    total_earned: 0,
+                    total_withdrawn: 0
+                };
+            }
 
-            // Refund amount back to wallet on rejection
-            user.wallet.balance += withdrawal.amount;
+            // Record total balance before refund
+            const totalBalanceBefore = (user.wallet.deposit_balance || 0) + (user.wallet.winning_balance || 0);
+
+            // Refund amount back to WINNING balance on rejection
+            user.wallet.winning_balance = (user.wallet.winning_balance || 0) + withdrawal.amount;
             await user.save();
+
+            const totalBalanceAfter = (user.wallet.deposit_balance || 0) + user.wallet.winning_balance;
 
             // Create wallet transaction record for refund
             await WalletTransaction.create({
                 user_id: user._id,
                 type: 'refund',
                 amount: withdrawal.amount,
-                balance_before: balanceBefore,
-                balance_after: user.wallet.balance,
+                balance_before: totalBalanceBefore,
+                balance_after: totalBalanceAfter,
                 description: `Withdrawal rejection refund - ${rejection_reason || 'Request rejected'}`,
                 reference_id: withdrawal_id,
                 reference_type: 'withdrawal',
@@ -346,8 +390,8 @@ export const processWithdrawal = async (req, res) => {
                 status: 'completed'
             });
         } else if (status === 'completed') {
-            // Amount already deducted, just update total_withdrawn
-            user.wallet.total_withdrawn += withdrawal.amount;
+            // Amount already deducted from winning_balance, just update total_withdrawn
+            user.wallet.total_withdrawn = (user.wallet.total_withdrawn || 0) + withdrawal.amount;
             await user.save();
 
             // Update the original withdrawal transaction status

@@ -174,25 +174,34 @@ export const verifyWalletTopup = async (req, res) => {
 
         // Initialize wallet if it doesn't exist
         if (!user.wallet) {
-            user.wallet = { balance: 0, total_earned: 0, total_withdrawn: 0 };
+            user.wallet = {
+                deposit_balance: 0,
+                winning_balance: 0,
+                total_deposited: 0,
+                total_earned: 0,
+                total_withdrawn: 0
+            };
         }
 
-        // Record balance before transaction
-        const balanceBefore = user.wallet.balance || 0;
+        // Record balances before transaction
+        const depositBalanceBefore = user.wallet.deposit_balance || 0;
+        const totalBalance = (user.wallet.deposit_balance || 0) + (user.wallet.winning_balance || 0);
 
-        // Add money to wallet
-        user.wallet.balance = balanceBefore + topupAmount;
-        user.wallet.total_earned = (user.wallet.total_earned || 0) + topupAmount;
+        // Add money to DEPOSIT balance (non-withdrawable)
+        user.wallet.deposit_balance = depositBalanceBefore + topupAmount;
+        user.wallet.total_deposited = (user.wallet.total_deposited || 0) + topupAmount;
         await user.save();
+
+        const newTotalBalance = user.wallet.deposit_balance + (user.wallet.winning_balance || 0);
 
         // Create transaction record
         await WalletTransaction.create({
             user_id,
             type: 'deposit',
             amount: topupAmount,
-            balance_before: balanceBefore,
-            balance_after: user.wallet.balance,
-            description: `Wallet top-up via Razorpay`,
+            balance_before: totalBalance,
+            balance_after: newTotalBalance,
+            description: `Deposit via Razorpay (Non-withdrawable - Use for contests only)`,
             reference_type: 'topup',
             payment_method: 'razorpay',
             transaction_id: razorpay_payment_id,
@@ -201,9 +210,12 @@ export const verifyWalletTopup = async (req, res) => {
 
         res.json({
             success: true,
-            message: `₹${topupAmount} added to wallet successfully!`,
+            message: `₹${topupAmount} added to deposit balance! Use it to enter contests and win prizes.`,
             wallet: {
-                balance: user.wallet.balance,
+                deposit_balance: user.wallet.deposit_balance,
+                winning_balance: user.wallet.winning_balance,
+                total_balance: newTotalBalance,
+                total_deposited: user.wallet.total_deposited,
                 total_earned: user.wallet.total_earned,
                 total_withdrawn: user.wallet.total_withdrawn
             },
@@ -260,7 +272,13 @@ export const getWalletTransactions = async (req, res) => {
                 pages: Math.ceil(total / limit),
                 total
             },
-            wallet: user.wallet || { balance: 0, total_earned: 0, total_withdrawn: 0 }
+            wallet: user.wallet || {
+                deposit_balance: 0,
+                winning_balance: 0,
+                total_deposited: 0,
+                total_earned: 0,
+                total_withdrawn: 0
+            }
         });
 
     } catch (error) {

@@ -539,27 +539,54 @@ export const submitArtwork = async (req, res) => {
             // Must pay with wallet - validate balance
             if (payment_method === 'wallet') {
                 const entryFee = campaign.entry_fee.amount;
-                if (!user.wallet || user.wallet.balance < entryFee) {
+
+                // Initialize wallet if needed
+                if (!user.wallet) {
+                    user.wallet = {
+                        deposit_balance: 0,
+                        winning_balance: 0,
+                        total_deposited: 0,
+                        total_earned: 0,
+                        total_withdrawn: 0
+                    };
+                }
+
+                const depositBalance = user.wallet.deposit_balance || 0;
+                const winningBalance = user.wallet.winning_balance || 0;
+                const totalBalance = depositBalance + winningBalance;
+
+                if (totalBalance < entryFee) {
                     return res.status(400).json({
                         success: false,
-                        message: `Insufficient wallet balance. You need ₹${entryFee} but have only ₹${user.wallet?.balance || 0}. Please add money to wallet.`
+                        message: `Insufficient wallet balance. You need ₹${entryFee} but have only ₹${totalBalance}. Please add money to wallet.`
                     });
                 }
 
-                // Record balance before transaction
-                const balanceBefore = user.wallet.balance;
+                // Record total balance before transaction
+                const totalBalanceBefore = totalBalance;
 
-                // Deduct from wallet
-                user.wallet.balance -= entryFee;
+                // Deduct from deposit_balance first, then winning_balance if needed
+                let remainingFee = entryFee;
+                if (depositBalance >= remainingFee) {
+                    // Sufficient deposit balance
+                    user.wallet.deposit_balance -= remainingFee;
+                } else {
+                    // Use all deposit balance, then deduct remainder from winning balance
+                    remainingFee -= depositBalance;
+                    user.wallet.deposit_balance = 0;
+                    user.wallet.winning_balance -= remainingFee;
+                }
                 await user.save();
+
+                const totalBalanceAfter = (user.wallet.deposit_balance || 0) + (user.wallet.winning_balance || 0);
 
                 // Create wallet transaction record
                 await WalletTransaction.create({
                     user_id,
                     type: 'contest_entry',
                     amount: entryFee,
-                    balance_before: balanceBefore,
-                    balance_after: user.wallet.balance,
+                    balance_before: totalBalanceBefore,
+                    balance_after: totalBalanceAfter,
                     description: `Contest entry fee for "${campaign.name}"`,
                     reference_id: campaign_id.toString(),
                     reference_type: 'campaign',
@@ -589,27 +616,54 @@ export const submitArtwork = async (req, res) => {
             } else if (payment_method === 'wallet') {
                 // Pay with wallet
                 const entryFee = campaign.entry_fee.amount;
-                if (!user.wallet || user.wallet.balance < entryFee) {
+
+                // Initialize wallet if needed
+                if (!user.wallet) {
+                    user.wallet = {
+                        deposit_balance: 0,
+                        winning_balance: 0,
+                        total_deposited: 0,
+                        total_earned: 0,
+                        total_withdrawn: 0
+                    };
+                }
+
+                const depositBalance = user.wallet.deposit_balance || 0;
+                const winningBalance = user.wallet.winning_balance || 0;
+                const totalBalance = depositBalance + winningBalance;
+
+                if (totalBalance < entryFee) {
                     return res.status(400).json({
                         success: false,
-                        message: `Insufficient wallet balance. You need ₹${entryFee} but have only ₹${user.wallet?.balance || 0}. Please add money to wallet.`
+                        message: `Insufficient wallet balance. You need ₹${entryFee} but have only ₹${totalBalance}. Please add money to wallet.`
                     });
                 }
 
-                // Record balance before transaction
-                const balanceBefore = user.wallet.balance;
+                // Record total balance before transaction
+                const totalBalanceBefore = totalBalance;
 
-                // Deduct from wallet
-                user.wallet.balance -= entryFee;
+                // Deduct from deposit_balance first, then winning_balance if needed
+                let remainingFee = entryFee;
+                if (depositBalance >= remainingFee) {
+                    // Sufficient deposit balance
+                    user.wallet.deposit_balance -= remainingFee;
+                } else {
+                    // Use all deposit balance, then deduct remainder from winning balance
+                    remainingFee -= depositBalance;
+                    user.wallet.deposit_balance = 0;
+                    user.wallet.winning_balance -= remainingFee;
+                }
                 await user.save();
+
+                const totalBalanceAfter = (user.wallet.deposit_balance || 0) + (user.wallet.winning_balance || 0);
 
                 // Create wallet transaction record
                 await WalletTransaction.create({
                     user_id,
                     type: 'contest_entry',
                     amount: entryFee,
-                    balance_before: balanceBefore,
-                    balance_after: user.wallet.balance,
+                    balance_before: totalBalanceBefore,
+                    balance_after: totalBalanceAfter,
                     description: `Contest entry fee for "${campaign.name}" (Point-based campaign)`,
                     reference_id: campaign_id.toString(),
                     reference_type: 'campaign',
@@ -1424,59 +1478,77 @@ export const distributePrizes = async (req, res) => {
         if (firstWinnerUser) {
             // Initialize wallet if it doesn't exist
             if (!firstWinnerUser.wallet) {
-                firstWinnerUser.wallet = { balance: 0, total_earned: 0, total_withdrawn: 0 };
+                firstWinnerUser.wallet = {
+                    deposit_balance: 0,
+                    winning_balance: 0,
+                    total_deposited: 0,
+                    total_earned: 0,
+                    total_withdrawn: 0
+                };
             }
 
-            // Record balance before prize
-            const balanceBefore = firstWinnerUser.wallet.balance;
+            // Record total balance before prize
+            const totalBalanceBefore = (firstWinnerUser.wallet.deposit_balance || 0) + (firstWinnerUser.wallet.winning_balance || 0);
 
-            firstWinnerUser.wallet.balance = balanceBefore + campaign.prizes.first_prize;
+            // Add prize to WINNING balance (withdrawable)
+            firstWinnerUser.wallet.winning_balance = (firstWinnerUser.wallet.winning_balance || 0) + campaign.prizes.first_prize;
             firstWinnerUser.wallet.total_earned = (firstWinnerUser.wallet.total_earned || 0) + campaign.prizes.first_prize;
             await firstWinnerUser.save();
+
+            const totalBalanceAfter = (firstWinnerUser.wallet.deposit_balance || 0) + firstWinnerUser.wallet.winning_balance;
 
             // Create wallet transaction record for prize
             await WalletTransaction.create({
                 user_id: firstWinnerUser._id,
                 type: 'prize_won',
                 amount: campaign.prizes.first_prize,
-                balance_before: balanceBefore,
-                balance_after: firstWinnerUser.wallet.balance,
-                description: `First Prize Winner - "${campaign.name}"`,
+                balance_before: totalBalanceBefore,
+                balance_after: totalBalanceAfter,
+                description: `🏆 First Prize Winner - "${campaign.name}" (Withdrawable)`,
                 reference_id: campaign_id.toString(),
                 reference_type: 'campaign',
                 status: 'completed'
             });
 
-            console.log(`💰 Added ₹${campaign.prizes.first_prize} to first winner's wallet. New balance: ₹${firstWinnerUser.wallet.balance}`);
+            console.log(`💰 Added ₹${campaign.prizes.first_prize} to first winner's WINNING balance (withdrawable). New balance: ₹${totalBalanceAfter}`);
         }
 
         if (secondWinnerUser) {
             // Initialize wallet if it doesn't exist
             if (!secondWinnerUser.wallet) {
-                secondWinnerUser.wallet = { balance: 0, total_earned: 0, total_withdrawn: 0 };
+                secondWinnerUser.wallet = {
+                    deposit_balance: 0,
+                    winning_balance: 0,
+                    total_deposited: 0,
+                    total_earned: 0,
+                    total_withdrawn: 0
+                };
             }
 
-            // Record balance before prize
-            const balanceBefore = secondWinnerUser.wallet.balance;
+            // Record total balance before prize
+            const totalBalanceBefore = (secondWinnerUser.wallet.deposit_balance || 0) + (secondWinnerUser.wallet.winning_balance || 0);
 
-            secondWinnerUser.wallet.balance = balanceBefore + campaign.prizes.second_prize;
+            // Add prize to WINNING balance (withdrawable)
+            secondWinnerUser.wallet.winning_balance = (secondWinnerUser.wallet.winning_balance || 0) + campaign.prizes.second_prize;
             secondWinnerUser.wallet.total_earned = (secondWinnerUser.wallet.total_earned || 0) + campaign.prizes.second_prize;
             await secondWinnerUser.save();
+
+            const totalBalanceAfter = (secondWinnerUser.wallet.deposit_balance || 0) + secondWinnerUser.wallet.winning_balance;
 
             // Create wallet transaction record for prize
             await WalletTransaction.create({
                 user_id: secondWinnerUser._id,
                 type: 'prize_won',
                 amount: campaign.prizes.second_prize,
-                balance_before: balanceBefore,
-                balance_after: secondWinnerUser.wallet.balance,
-                description: `Second Prize Winner - "${campaign.name}"`,
+                balance_before: totalBalanceBefore,
+                balance_after: totalBalanceAfter,
+                description: `🥈 Second Prize Winner - "${campaign.name}" (Withdrawable)`,
                 reference_id: campaign_id.toString(),
                 reference_type: 'campaign',
                 status: 'completed'
             });
 
-            console.log(`💰 Added ₹${campaign.prizes.second_prize} to second winner's wallet. New balance: ₹${secondWinnerUser.wallet.balance}`);
+            console.log(`💰 Added ₹${campaign.prizes.second_prize} to second winner's WINNING balance (withdrawable). New balance: ₹${totalBalanceAfter}`);
         }
 
         // Award points to non-winning participants
