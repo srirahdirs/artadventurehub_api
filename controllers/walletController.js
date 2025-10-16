@@ -4,8 +4,8 @@ import crypto from 'crypto';
 import Razorpay from 'razorpay';
 
 // Get Razorpay credentials from environment variables or use defaults
-const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || 'rzp_test_RTLfVuh0oeGyG5';
-const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'xl2Q9h0dw59EBnPgAOrtxUZ9';
+const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || 'rzp_live_RU7c0QfYUF6xe9';
+const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'JejHML2EzTycLHHW1HFqelty';
 
 // Validate Razorpay credentials
 if (!RAZORPAY_KEY_ID || !RAZORPAY_KEY_SECRET) {
