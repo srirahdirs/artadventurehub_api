@@ -44,8 +44,24 @@ const campaignSubmissionSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['submitted', 'under_review', 'approved', 'rejected', 'winner', 'runner_up'],
+        enum: ['draft', 'submitted', 'under_review', 'approved', 'rejected', 'winner', 'runner_up'],
         default: 'submitted'
+    },
+    is_draft: {
+        type: Boolean,
+        default: false
+    },
+    draft_saved_at: {
+        type: Date,
+        default: null
+    },
+    draft_reminder_sent: {
+        type: Date,
+        default: null
+    },
+    draft_reminder_count: {
+        type: Number,
+        default: 0
     },
     votes: {
         type: Number,
@@ -92,8 +108,15 @@ const campaignSubmissionSchema = new mongoose.Schema({
     timestamps: true
 });
 
-// Compound index to ensure one submission per user per campaign
-campaignSubmissionSchema.index({ campaign_id: 1, user_id: 1 }, { unique: true });
+// Compound index to ensure one PAID submission per user per campaign
+// Partial index: only applies to paid submissions (is_draft: false), allows multiple drafts
+campaignSubmissionSchema.index(
+    { campaign_id: 1, user_id: 1 },
+    {
+        unique: true,
+        partialFilterExpression: { is_draft: false }
+    }
+);
 
 // Index for faster lookups
 campaignSubmissionSchema.index({ status: 1 });

@@ -503,10 +503,11 @@ export const submitArtwork = async (req, res) => {
             });
         }
 
-        // Check if user already submitted
+        // Check if user already submitted (exclude drafts)
         const existingSubmission = await CampaignSubmission.findOne({
             campaign_id,
-            user_id
+            user_id,
+            is_draft: false // Only check for paid submissions, not drafts
         });
 
         if (existingSubmission) {
@@ -514,6 +515,20 @@ export const submitArtwork = async (req, res) => {
                 success: false,
                 message: 'You have already submitted to this campaign'
             });
+        }
+
+        // Check if user has a draft for this campaign
+        const existingDraft = await CampaignSubmission.findOne({
+            campaign_id,
+            user_id,
+            is_draft: true
+        });
+
+        // If draft exists, delete it before creating new paid submission
+        // This handles the case where user submits through regular form instead of completing draft
+        if (existingDraft) {
+            await CampaignSubmission.findByIdAndDelete(existingDraft._id);
+            console.log(`🗑️ Deleted existing draft ${existingDraft._id} for user ${user_id} before creating new submission`);
         }
 
         // Get user
@@ -724,12 +739,15 @@ export const submitArtwork = async (req, res) => {
     }
 };
 
-// Get user's submissions
+// Get user's submissions (excluding drafts)
 export const getUserSubmissions = async (req, res) => {
     try {
         const { user_id } = req.params;
 
-        const submissions = await CampaignSubmission.find({ user_id })
+        const submissions = await CampaignSubmission.find({
+            user_id,
+            is_draft: false // Exclude drafts from regular submissions
+        })
             .populate('campaign_id')
             .sort({ submitted_at: -1 });
 
@@ -755,12 +773,428 @@ export const getUserSubmissions = async (req, res) => {
     }
 };
 
+// ============ DRAFT SYSTEM ============
+
+// Save artwork as draft (no payment required)
+export const saveDraft = async (req, res) => {
+    try {
+        const { campaign_id, user_id, submission_image, title, description } = req.body;
+
+        if (!campaign_id || !user_id || !submission_image) {
+            return res.status(400).json({
+                success: false,
+                message: 'Campaign ID, User ID, and submission image are required'
+            });
+        }
+
+        // Check if campaign exists and is active
+        const campaign = await Campaign.findById(campaign_id);
+        if (!campaign) {
+            return res.status(404).json({
+                success: false,
+                message: 'Campaign not found'
+            });
+        }
+
+        if (campaign.status !== 'active') {
+            return res.status(400).json({
+                success: false,
+                message: 'Campaign is not active'
+            });
+        }
+
+        // Check if user already has a paid submission for this campaign
+        const existingPaidSubmission = await CampaignSubmission.findOne({
+            campaign_id,
+            user_id,
+            is_draft: false
+        });
+
+        if (existingPaidSubmission) {
+            return res.status(400).json({
+                success: false,
+                message: 'You have already submitted to this campaign'
+            });
+        }
+
+        // Check if user already has a draft for this campaign
+        let draft = await CampaignSubmission.findOne({
+            campaign_id,
+            user_id,
+            is_draft: true
+        });
+
+        if (draft) {
+            // Update existing draft
+            draft.submission_image = submission_image;
+            draft.title = title || '';
+            draft.description = description || '';
+            draft.draft_saved_at = new Date();
+            await draft.save();
+
+            console.log(`📝 Updated draft for user ${user_id} in campaign ${campaign_id}`);
+        } else {
+            // Create new draft
+            draft = new CampaignSubmission({
+                campaign_id,
+                user_id,
+                submission_image,
+                title: title || '',
+                description: description || '',
+                status: 'draft',
+                is_draft: true,
+                draft_saved_at: new Date(),
+                payment_status: 'pending',
+                payment_amount: campaign.entry_fee.amount
+            });
+
+            await draft.save();
+            console.log(`📝 Created new draft for user ${user_id} in campaign ${campaign_id}`);
+        }
+
+        res.status(201).json({
+            success: true,
+            message: 'Draft saved successfully! Complete payment to participate.',
+            draft: {
+                id: draft._id,
+                campaign_id: draft.campaign_id,
+                submission_image: draft.submission_image,
+                title: draft.title,
+                description: draft.description,
+                draft_saved_at: draft.draft_saved_at
+            }
+        });
+    } catch (error) {
+        console.error('Save Draft Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error saving draft',
+            error: error.message
+        });
+    }
+};
+
+// Get user's draft submissions
+export const getUserDrafts = async (req, res) => {
+    try {
+        const { user_id } = req.params;
+
+        const drafts = await CampaignSubmission.find({
+            user_id,
+            is_draft: true
+        })
+            .populate('campaign_id')
+            .sort({ draft_saved_at: -1 });
+
+        // Filter out drafts for inactive/completed/cancelled campaigns
+        const activeDrafts = drafts.filter(draft =>
+            draft.campaign_id &&
+            draft.campaign_id.status === 'active'
+        );
+
+        console.log(`📊 User ${user_id} has ${activeDrafts.length} active drafts`);
+
+        res.json({
+            success: true,
+            count: activeDrafts.length,
+            drafts: activeDrafts.map(draft => ({
+                id: draft._id,
+                campaign: {
+                    id: draft.campaign_id._id,
+                    name: draft.campaign_id.name,
+                    description: draft.campaign_id.description,
+                    reference_image: draft.campaign_id.reference_image,
+                    entry_fee: draft.campaign_id.entry_fee,
+                    campaign_type: draft.campaign_id.campaign_type,
+                    points_required: draft.campaign_id.points_required,
+                    prizes: draft.campaign_id.prizes,
+                    submission_deadline: draft.campaign_id.submission_deadline,
+                    is_full: draft.campaign_id.current_participants >= draft.campaign_id.max_participants
+                },
+                submission_image: draft.submission_image,
+                title: draft.title,
+                description: draft.description,
+                draft_saved_at: draft.draft_saved_at,
+                payment_amount: draft.payment_amount
+            }))
+        });
+    } catch (error) {
+        console.error('Get User Drafts Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching drafts',
+            error: error.message
+        });
+    }
+};
+
+// Complete draft by processing payment
+export const completeDraft = async (req, res) => {
+    try {
+        const { draft_id, payment_method } = req.body;
+
+        if (!draft_id) {
+            return res.status(400).json({
+                success: false,
+                message: 'Draft ID is required'
+            });
+        }
+
+        // Get the draft
+        const draft = await CampaignSubmission.findById(draft_id);
+        if (!draft || !draft.is_draft) {
+            return res.status(404).json({
+                success: false,
+                message: 'Draft not found'
+            });
+        }
+
+        // Get campaign
+        const campaign = await Campaign.findById(draft.campaign_id);
+        if (!campaign) {
+            return res.status(404).json({
+                success: false,
+                message: 'Campaign not found'
+            });
+        }
+
+        if (campaign.status !== 'active') {
+            return res.status(400).json({
+                success: false,
+                message: 'Campaign is no longer active'
+            });
+        }
+
+        // Check if campaign is full
+        if (campaign.current_participants >= campaign.max_participants) {
+            return res.status(400).json({
+                success: false,
+                message: 'Campaign is full'
+            });
+        }
+
+        // Get user
+        const User = (await import('../models/User.js')).default;
+        const user = await User.findById(draft.user_id);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        // Process payment based on campaign type (same logic as submitArtwork)
+        if (campaign.campaign_type === 'premium') {
+            if (payment_method === 'points') {
+                return res.status(400).json({
+                    success: false,
+                    message: 'This is a premium campaign. Points cannot be used.'
+                });
+            }
+
+            if (payment_method === 'wallet') {
+                const entryFee = campaign.entry_fee.amount;
+                if (!user.wallet) {
+                    user.wallet = {
+                        deposit_balance: 0,
+                        winning_balance: 0,
+                        total_deposited: 0,
+                        total_earned: 0,
+                        total_withdrawn: 0
+                    };
+                }
+
+                const depositBalance = user.wallet.deposit_balance || 0;
+                const winningBalance = user.wallet.winning_balance || 0;
+                const totalBalance = depositBalance + winningBalance;
+
+                if (totalBalance < entryFee) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Insufficient wallet balance. You need ₹${entryFee} but have only ₹${totalBalance}.`
+                    });
+                }
+
+                const totalBalanceBefore = totalBalance;
+                let remainingFee = entryFee;
+                if (depositBalance >= remainingFee) {
+                    user.wallet.deposit_balance -= remainingFee;
+                } else {
+                    remainingFee -= depositBalance;
+                    user.wallet.deposit_balance = 0;
+                    user.wallet.winning_balance -= remainingFee;
+                }
+                await user.save();
+
+                const totalBalanceAfter = (user.wallet.deposit_balance || 0) + (user.wallet.winning_balance || 0);
+
+                await WalletTransaction.create({
+                    user_id: user._id,
+                    type: 'contest_entry',
+                    amount: entryFee,
+                    balance_before: totalBalanceBefore,
+                    balance_after: totalBalanceAfter,
+                    description: `Contest entry fee for "${campaign.name}" (from draft)`,
+                    reference_id: campaign._id.toString(),
+                    reference_type: 'campaign',
+                    payment_method: 'wallet',
+                    status: 'completed'
+                });
+            }
+        } else if (campaign.campaign_type === 'point-based') {
+            if (payment_method === 'points') {
+                const POINTS_REQUIRED = campaign.points_required || 500;
+                if (user.points < POINTS_REQUIRED) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Insufficient points. You need ${POINTS_REQUIRED} points but have only ${user.points} points.`
+                    });
+                }
+                user.points -= POINTS_REQUIRED;
+                await user.save();
+            } else if (payment_method === 'wallet') {
+                const entryFee = campaign.entry_fee.amount;
+                if (!user.wallet) {
+                    user.wallet = {
+                        deposit_balance: 0,
+                        winning_balance: 0,
+                        total_deposited: 0,
+                        total_earned: 0,
+                        total_withdrawn: 0
+                    };
+                }
+
+                const depositBalance = user.wallet.deposit_balance || 0;
+                const winningBalance = user.wallet.winning_balance || 0;
+                const totalBalance = depositBalance + winningBalance;
+
+                if (totalBalance < entryFee) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Insufficient wallet balance. You need ₹${entryFee} but have only ₹${totalBalance}.`
+                    });
+                }
+
+                const totalBalanceBefore = totalBalance;
+                let remainingFee = entryFee;
+                if (depositBalance >= remainingFee) {
+                    user.wallet.deposit_balance -= remainingFee;
+                } else {
+                    remainingFee -= depositBalance;
+                    user.wallet.deposit_balance = 0;
+                    user.wallet.winning_balance -= remainingFee;
+                }
+                await user.save();
+
+                const totalBalanceAfter = (user.wallet.deposit_balance || 0) + (user.wallet.winning_balance || 0);
+
+                await WalletTransaction.create({
+                    user_id: user._id,
+                    type: 'contest_entry',
+                    amount: entryFee,
+                    balance_before: totalBalanceBefore,
+                    balance_after: totalBalanceAfter,
+                    description: `Contest entry fee for "${campaign.name}" (from draft)`,
+                    reference_id: campaign._id.toString(),
+                    reference_type: 'campaign',
+                    payment_method: 'wallet',
+                    status: 'completed'
+                });
+            }
+        }
+
+        // Convert draft to submission
+        draft.is_draft = false;
+        draft.status = 'submitted';
+        draft.payment_status = 'paid';
+        draft.payment_method = payment_method;
+        draft.submitted_at = new Date();
+        await draft.save();
+
+        // Increment participant count
+        campaign.current_participants += 1;
+        await campaign.save();
+
+        // Increment user's contests participated count
+        user.contests_participated += 1;
+        await user.save();
+
+        // Award referral points if this is user's first campaign
+        try {
+            const referralResult = await awardReferralPoints(user._id);
+            if (referralResult.success) {
+                console.log('✅ Referral points awarded:', referralResult.pointsAwarded);
+            }
+        } catch (err) {
+            console.error('Referral points award error (non-fatal):', err);
+        }
+
+        res.json({
+            success: true,
+            message: '🎉 Draft completed successfully! Your submission is now live.',
+            submission: draft
+        });
+    } catch (error) {
+        console.error('Complete Draft Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error completing draft',
+            error: error.message
+        });
+    }
+};
+
+// Delete a draft
+export const deleteDraft = async (req, res) => {
+    try {
+        const { draft_id } = req.params;
+        const { user_id } = req.body;
+
+        if (!draft_id || !user_id) {
+            return res.status(400).json({
+                success: false,
+                message: 'Draft ID and User ID are required'
+            });
+        }
+
+        const draft = await CampaignSubmission.findOne({
+            _id: draft_id,
+            user_id,
+            is_draft: true
+        });
+
+        if (!draft) {
+            return res.status(404).json({
+                success: false,
+                message: 'Draft not found'
+            });
+        }
+
+        await CampaignSubmission.findByIdAndDelete(draft_id);
+
+        res.json({
+            success: true,
+            message: 'Draft deleted successfully'
+        });
+    } catch (error) {
+        console.error('Delete Draft Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error deleting draft',
+            error: error.message
+        });
+    }
+};
+
 // Get campaign participants list
 export const getCampaignParticipants = async (req, res) => {
     try {
         const { campaign_id } = req.params;
 
-        const participants = await CampaignSubmission.find({ campaign_id })
+        const participants = await CampaignSubmission.find({
+            campaign_id,
+            is_draft: false // Exclude drafts from participants list
+        })
             .populate('user_id', 'username mobile_number bio avatar')
             .select('user_id submitted_at status')
             .sort({ submitted_at: -1 });

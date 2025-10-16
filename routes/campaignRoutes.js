@@ -16,6 +16,11 @@ import {
     getUserSubmissions,
     getCampaignParticipants,
     getCampaignLeaderboard,
+    // Draft operations
+    saveDraft,
+    getUserDrafts,
+    completeDraft,
+    deleteDraft,
     // Social features
     getSubmissionsFeed,
     likeSubmission,
@@ -98,6 +103,12 @@ router.get('/:campaign_id/leaderboard', getCampaignLeaderboard);
 router.post('/submit', submitArtwork);
 router.get('/user/:user_id/submissions', getUserSubmissions);
 router.get('/:campaign_id/participants', getCampaignParticipants);
+
+// ============ DRAFT ROUTES ============
+router.post('/draft/save', saveDraft);
+router.get('/draft/user/:user_id', getUserDrafts);
+router.post('/draft/complete', completeDraft);
+router.delete('/draft/:draft_id', deleteDraft);
 
 // ============ SOCIAL FEED ROUTES ============
 router.get('/feed', getSubmissionsFeed);
