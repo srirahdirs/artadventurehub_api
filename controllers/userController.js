@@ -618,14 +618,28 @@ export const getUserProfile = async (req, res) => {
     try {
         const { userId } = req.params;
 
+        console.log('📍 Get Profile Request for userId:', userId);
+
+        // Validate MongoDB ObjectId format
+        if (!userId || !userId.match(/^[0-9a-fA-F]{24}$/)) {
+            console.log('❌ Invalid user ID format:', userId);
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid user ID format'
+            });
+        }
+
         const user = await User.findById(userId).select('-password');
 
         if (!user) {
+            console.log('❌ User not found for ID:', userId);
             return res.status(404).json({
                 success: false,
                 message: 'User not found'
             });
         }
+
+        console.log('✅ User profile found:', user.username || user.mobile_number);
 
         res.json({
             success: true,
@@ -638,16 +652,23 @@ export const getUserProfile = async (req, res) => {
                 status: user.status,
                 points: user.points,
                 referral_code: user.referral_code,
-                wallet: user.wallet || { balance: 0, total_earned: 0, total_withdrawn: 0 },
+                wallet: user.wallet || {
+                    deposit_balance: 0,
+                    winning_balance: 0,
+                    total_deposited: 0,
+                    total_earned: 0,
+                    total_withdrawn: 0
+                },
                 withdrawal_details: user.withdrawal_details || { upi_id: '', bank_details: {} },
                 total_referrals: user.total_referrals,
                 successful_referrals: user.successful_referrals,
+                contests_participated: user.contests_participated || 0,
                 createdAt: user.createdAt,
                 updatedAt: user.updatedAt
             }
         });
     } catch (error) {
-        console.error('Get User Profile Error:', error);
+        console.error('❌ Get User Profile Error:', error);
         res.status(500).json({
             success: false,
             message: 'Error fetching user profile',
