@@ -36,7 +36,7 @@ const allowedOrigins = [
     'https://admin.artadventurehub.com'
 ];
 
-// ✅ Global CORS Middleware
+// ✅ Global CORS Middleware - Enhanced for production
 app.use(
     cors({
         origin: function (origin, callback) {
@@ -46,6 +46,7 @@ app.use(
             }
 
             if (allowedOrigins.includes(origin)) {
+                console.log('✅ CORS allowed for:', origin);
                 callback(null, true);
             } else {
                 console.log('❌ CORS blocked for:', origin);
@@ -54,9 +55,16 @@ app.use(
         },
         credentials: true,
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+        exposedHeaders: ['Content-Range', 'X-Content-Range'],
+        maxAge: 86400, // 24 hours - cache preflight requests
+        preflightContinue: false,
+        optionsSuccessStatus: 204
     })
 );
+
+// ✅ Additional preflight handler for complex requests
+app.options('*', cors());
 
 // ✅ Serve uploads folder (with proper headers)
 app.use(
