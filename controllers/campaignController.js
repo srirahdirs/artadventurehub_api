@@ -469,7 +469,18 @@ export const getActiveCampaigns = async (req, res) => {
 // Submit artwork to campaign (User)
 export const submitArtwork = async (req, res) => {
     try {
-        const { campaign_id, user_id, submission_image, title, description, payment_method } = req.body;
+        const {
+            campaign_id,
+            user_id,
+            submission_image,
+            title,
+            description,
+            payment_method,
+            coupon_code,
+            original_amount,
+            discount_amount,
+            final_amount
+        } = req.body;
 
         if (!campaign_id || !user_id || !submission_image) {
             return res.status(400).json({
@@ -553,7 +564,8 @@ export const submitArtwork = async (req, res) => {
             }
             // Must pay with wallet - validate balance
             if (payment_method === 'wallet') {
-                const entryFee = campaign.entry_fee.amount;
+                // Use final_amount if coupon applied, otherwise use campaign entry fee
+                const entryFee = final_amount !== undefined ? final_amount : campaign.entry_fee.amount;
 
                 // Initialize wallet if needed
                 if (!user.wallet) {
@@ -596,20 +608,24 @@ export const submitArtwork = async (req, res) => {
                 const totalBalanceAfter = (user.wallet.deposit_balance || 0) + (user.wallet.winning_balance || 0);
 
                 // Create wallet transaction record
+                const transactionDescription = coupon_code
+                    ? `Contest entry fee for "${campaign.name}" (Coupon: ${coupon_code}, Saved: ₹${discount_amount || 0})`
+                    : `Contest entry fee for "${campaign.name}"`;
+
                 await WalletTransaction.create({
                     user_id,
                     type: 'contest_entry',
                     amount: entryFee,
                     balance_before: totalBalanceBefore,
                     balance_after: totalBalanceAfter,
-                    description: `Contest entry fee for "${campaign.name}"`,
+                    description: transactionDescription,
                     reference_id: campaign_id.toString(),
                     reference_type: 'campaign',
                     payment_method: 'wallet',
                     status: 'completed'
                 });
 
-                console.log(`✅ Deducted ₹${entryFee} from wallet for user ${user.username || user.mobile_number}`);
+                console.log(`✅ Deducted ₹${entryFee} from wallet for user ${user.username || user.mobile_number}${coupon_code ? ` (Coupon: ${coupon_code})` : ''}`);
             }
         } else if (campaign.campaign_type === 'point-based') {
             // Point-based campaigns: Can pay with wallet OR use points (user's choice)
@@ -630,7 +646,8 @@ export const submitArtwork = async (req, res) => {
                 console.log(`✅ Deducted ${POINTS_REQUIRED} points from user ${user.username || user.mobile_number}`);
             } else if (payment_method === 'wallet') {
                 // Pay with wallet
-                const entryFee = campaign.entry_fee.amount;
+                // Use final_amount if coupon applied, otherwise use campaign entry fee
+                const entryFee = final_amount !== undefined ? final_amount : campaign.entry_fee.amount;
 
                 // Initialize wallet if needed
                 if (!user.wallet) {
@@ -673,24 +690,30 @@ export const submitArtwork = async (req, res) => {
                 const totalBalanceAfter = (user.wallet.deposit_balance || 0) + (user.wallet.winning_balance || 0);
 
                 // Create wallet transaction record
+                const transactionDescription = coupon_code
+                    ? `Contest entry fee for "${campaign.name}" (Point-based campaign, Coupon: ${coupon_code}, Saved: ₹${discount_amount || 0})`
+                    : `Contest entry fee for "${campaign.name}" (Point-based campaign)`;
+
                 await WalletTransaction.create({
                     user_id,
                     type: 'contest_entry',
                     amount: entryFee,
                     balance_before: totalBalanceBefore,
                     balance_after: totalBalanceAfter,
-                    description: `Contest entry fee for "${campaign.name}" (Point-based campaign)`,
+                    description: transactionDescription,
                     reference_id: campaign_id.toString(),
                     reference_type: 'campaign',
                     payment_method: 'wallet',
                     status: 'completed'
                 });
 
-                console.log(`✅ Deducted ₹${entryFee} from wallet for user ${user.username || user.mobile_number}`);
+                console.log(`✅ Deducted ₹${entryFee} from wallet for user ${user.username || user.mobile_number}${coupon_code ? ` (Coupon: ${coupon_code})` : ''}`);
             }
         }
 
         // Create submission
+        const actualPaymentAmount = final_amount !== undefined ? final_amount : campaign.entry_fee.amount;
+
         const submission = new CampaignSubmission({
             campaign_id,
             user_id,
@@ -698,7 +721,10 @@ export const submitArtwork = async (req, res) => {
             title,
             description,
             payment_method: payment_method || campaign.entry_fee.type,
-            payment_amount: campaign.entry_fee.amount,
+            payment_amount: actualPaymentAmount,
+            original_amount: original_amount || campaign.entry_fee.amount,
+            discount_amount: discount_amount || 0,
+            coupon_code: coupon_code || null,
             payment_status: 'paid' // Update after actual payment integration
         });
 

@@ -38,6 +38,19 @@ const campaignSubmissionSchema = new mongoose.Schema({
         type: Number,
         required: true
     },
+    original_amount: {
+        type: Number,
+        default: null
+    },
+    discount_amount: {
+        type: Number,
+        default: 0
+    },
+    coupon_code: {
+        type: String,
+        default: null,
+        uppercase: true
+    },
     transaction_id: {
         type: String,
         default: null
