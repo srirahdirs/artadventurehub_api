@@ -1,7 +1,12 @@
+import dotenv from 'dotenv';
+
+// ⚠️ CRITICAL: Load environment variables FIRST before any other imports
+// This ensures VAPID keys and other env vars are available when controllers load
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
 import axios from 'axios';
-import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import userRoutes from './routes/userRoutes.js';
 import campaignRoutes from './routes/campaignRoutes.js';
@@ -14,8 +19,6 @@ import couponRoutes from './routes/couponRoutes.js';
 import pushNotificationRoutes from './routes/pushNotificationRoutes.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
-
-dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

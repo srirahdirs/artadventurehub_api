@@ -1,0 +1,66 @@
+===========================================
+CREATE .env FILE NOW!
+===========================================
+
+IMPORTANT: You need to create a .env file!
+
+Location: C:\xampp\htdocs\artadventurehub\artadventurehub_api\.env
+
+===========================================
+
+COPY THIS ENTIRE CONTENT INTO YOUR .env FILE:
+
+===========================================
+
+# MongoDB Connection
+MONGO_URI=your_mongodb_uri_here
+
+# Razorpay Payment
+RAZORPAY_KEY_ID=your_razorpay_key_id
+RAZORPAY_KEY_SECRET=your_razorpay_secret
+
+# MSG91 OTP
+MSG91_AUTH_KEY=your_msg91_key
+MSG91_TEMPLATE_ID=your_msg91_template
+
+# Push Notifications (REQUIRED FOR PUSH!)
+VAPID_PUBLIC_KEY=BP2qIDp3Ld-QRsaVbMdXkktNHjngwA2aotvw2IKtRZj7cP5-Jk1PdgwEsJdA2NyOREuSUTJv6nDEVBGFrPJsGpA
+VAPID_PRIVATE_KEY=BvZY_a842eIIBiknUE1BQoGHEEtqGKtRTIyU76maVgU
+VAPID_EMAIL=mailto:yzentechnologies@gmail.com
+
+# Server Port
+PORT=3033
+
+===========================================
+
+STEPS TO CREATE:
+
+1. Open Notepad or VS Code
+
+2. Copy the content above
+
+3. Replace "your_mongodb_uri_here" with your actual MongoDB URI
+
+4. Replace "your_razorpay_*" with your actual Razorpay keys
+
+5. Replace "your_msg91_*" with your actual MSG91 keys
+
+6. Save as: .env
+   Location: C:\xampp\htdocs\artadventurehub\artadventurehub_api\.env
+
+7. Restart backend server
+
+===========================================
+
+IMPORTANT: The VAPID keys are ALREADY FILLED IN!
+Just add your MongoDB, Razorpay, and MSG91 credentials!
+
+===========================================
+
+After creating .env file:
+1. Stop backend (Ctrl+C)
+2. Restart: npm start
+3. Check logs for "✅ Web Push configured"
+
+===========================================
+

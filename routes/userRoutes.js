@@ -11,7 +11,8 @@ import {
     requestPasswordReset,
     resetPasswordWithOTP,
     getUserProfile,
-    updateUserProfile
+    updateUserProfile,
+    searchUsers
 } from '../controllers/userController.js';
 
 const router = express.Router();
@@ -43,6 +44,9 @@ const authMiddleware = (req, res, next) => {
 
 // Create or update user
 router.post('/create', createOrUpdateUser);
+
+// Search users (must come before other GET routes)
+router.get('/search', searchUsers);
 
 // Get all users
 router.get('/', getAllUsers);

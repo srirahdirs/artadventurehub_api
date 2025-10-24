@@ -736,3 +736,52 @@ export const updateUserProfile = async (req, res) => {
     }
 };
 
+// Search users by mobile number or username (for admin)
+export const searchUsers = async (req, res) => {
+    try {
+        const { q } = req.query;
+
+        if (!q || q.trim().length < 2) {
+            return res.json({
+                success: true,
+                users: []
+            });
+        }
+
+        const searchQuery = q.trim();
+
+        // Search by mobile number or username
+        const users = await User.find({
+            $or: [
+                { mobile_number: { $regex: searchQuery, $options: 'i' } },
+                { username: { $regex: searchQuery, $options: 'i' } }
+            ]
+        })
+            .select('_id username mobile_number points wallet status createdAt')
+            .limit(20)
+            .sort({ createdAt: -1 });
+
+        const formattedUsers = users.map(user => ({
+            id: user._id,
+            username: user.username,
+            mobile_number: user.mobile_number,
+            points: user.points || 0,
+            wallet_balance: user.wallet?.balance || 0,
+            status: user.status,
+            createdAt: user.createdAt
+        }));
+
+        res.json({
+            success: true,
+            users: formattedUsers
+        });
+    } catch (error) {
+        console.error('Search Users Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error searching users',
+            error: error.message
+        });
+    }
+};
+

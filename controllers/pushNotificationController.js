@@ -1,30 +1,32 @@
 import webPush from 'web-push';
 import PushSubscription from '../models/PushSubscription.js';
 
-// Configure web-push with VAPID keys (load from environment)
-const configureWebPush = () => {
+// VAPID configuration state
+let isConfigured = false;
+
+// Configure web-push with VAPID keys (lazy load - called when needed)
+const ensureConfigured = () => {
+    if (isConfigured) return true;
+
     const publicKey = process.env.VAPID_PUBLIC_KEY;
     const privateKey = process.env.VAPID_PRIVATE_KEY;
     const email = process.env.VAPID_EMAIL || 'mailto:yzentechnologies@gmail.com';
 
     if (!publicKey || !privateKey) {
-        console.warn('⚠️  VAPID keys not configured! Push notifications will not work.');
-        console.warn('Add VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY to .env file');
+        console.warn('⚠️ VAPID keys not configured! Push notifications will not work.');
         return false;
     }
 
     webPush.setVapidDetails(email, publicKey, privateKey);
     console.log('✅ Web Push configured with VAPID keys');
+    isConfigured = true;
     return true;
 };
-
-// Initialize on module load
-const isConfigured = configureWebPush();
 
 // Subscribe user to push notifications
 export const subscribe = async (req, res) => {
     try {
-        if (!isConfigured) {
+        if (!ensureConfigured()) {
             return res.status(500).json({
                 success: false,
                 message: 'Push notifications not configured on server'
@@ -147,7 +149,7 @@ export const unsubscribe = async (req, res) => {
 
 // Get VAPID public key (for frontend)
 export const getPublicKey = (req, res) => {
-    if (!isConfigured) {
+    if (!ensureConfigured()) {
         return res.status(500).json({
             success: false,
             message: 'Push notifications not configured'
@@ -188,8 +190,8 @@ export const getUserSubscriptions = async (req, res) => {
 // Send push notification to specific user
 export const sendNotificationToUser = async (userId, payload) => {
     try {
-        if (!isConfigured) {
-            console.warn('⚠️  Cannot send notification: Push not configured');
+        if (!ensureConfigured()) {
+            console.warn('⚠️ Cannot send notification: Push not configured');
             return { success: false, message: 'Push not configured' };
         }
 
