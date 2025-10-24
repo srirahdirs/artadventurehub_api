@@ -11,6 +11,7 @@ import referralRoutes from './routes/referralRoutes.js';
 import withdrawalRoutes from './routes/withdrawalRoutes.js';
 import walletRoutes from './routes/walletRoutes.js';
 import couponRoutes from './routes/couponRoutes.js';
+import pushNotificationRoutes from './routes/pushNotificationRoutes.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -128,6 +129,7 @@ app.use('/api/referrals', referralRoutes);
 app.use('/api/withdrawals', withdrawalRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/coupons', couponRoutes);
+app.use('/api/push', pushNotificationRoutes);
 app.use('/api', uploadRoutes);
 
 // ✅ MSG91 Configuration (keep these in .env for safety)

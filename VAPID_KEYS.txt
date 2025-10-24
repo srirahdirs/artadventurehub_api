@@ -1,0 +1,22 @@
+===========================================
+PUSH NOTIFICATION VAPID KEYS
+===========================================
+
+⚠️ IMPORTANT: Add these to your .env file!
+
+VAPID_PUBLIC_KEY=BP2qIDp3Ld-QRsaVbMdXkktNHjngwA2aotvw2IKtRZj7cP5-Jk1PdgwEsJdA2NyOREuSUTJv6nDEVBGFrPJsGpA
+
+VAPID_PRIVATE_KEY=BvZY_a842eIIBiknUE1BQoGHEEtqGKtRTIyU76maVgU
+
+VAPID_EMAIL=mailto:yzentechnologies@gmail.com
+
+===========================================
+
+🔐 SECURITY NOTE:
+- Keep VAPID_PRIVATE_KEY secret!
+- Never commit to Git
+- Add to .env file only
+- Public key can be shared with frontend
+
+===========================================
+

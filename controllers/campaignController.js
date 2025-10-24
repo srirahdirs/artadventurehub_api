@@ -4,6 +4,7 @@ import CampaignSubmission from '../models/CampaignSubmission.js';
 import Comment from '../models/Comment.js';
 import WalletTransaction from '../models/WalletTransaction.js';
 import { awardReferralPoints } from './referralController.js';
+import { sendNotificationToUser } from './pushNotificationController.js';
 
 // ============ ADMIN OPERATIONS ============
 
@@ -2059,6 +2060,32 @@ export const distributePrizes = async (req, res) => {
         // Update campaign status to completed
         campaign.status = 'completed';
         await campaign.save();
+
+        // 🔔 Send push notifications to winners
+        try {
+            // Notify first place winner
+            await sendNotificationToUser(firstWinner.user_id, {
+                title: '🎉 Congratulations! You Won 1st Place!',
+                body: `You won ₹${campaign.prizes.first_prize} in "${campaign.name}" contest! Prize credited to your wallet.`,
+                icon: campaign.reference_image || '/logo_purple.png',
+                url: '/#wallet',
+                tag: `winner-1st-${campaign._id}`
+            });
+
+            // Notify second place winner
+            await sendNotificationToUser(secondWinner.user_id, {
+                title: '🥈 Congratulations! You Won 2nd Place!',
+                body: `You won ₹${campaign.prizes.second_prize} in "${campaign.name}" contest! Prize credited to your wallet.`,
+                icon: campaign.reference_image || '/logo_purple.png',
+                url: '/#wallet',
+                tag: `winner-2nd-${campaign._id}`
+            });
+
+            console.log('✅ Winner notifications sent');
+        } catch (notifyError) {
+            console.error('⚠️ Error sending winner notifications:', notifyError);
+            // Don't fail the entire operation if notifications fail
+        }
 
         res.json({
             success: true,
