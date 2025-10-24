@@ -10,14 +10,14 @@ const ensureConfigured = () => {
 
     const publicKey = process.env.VAPID_PUBLIC_KEY;
     const privateKey = process.env.VAPID_PRIVATE_KEY;
-    const email = process.env.VAPID_EMAIL || 'mailto:yzentechnologies@gmail.com';
+    const subject = process.env.VAPID_SUBJECT || 'mailto:yzentechnologies@gmail.com';
 
     if (!publicKey || !privateKey) {
         console.warn('⚠️ VAPID keys not configured! Push notifications will not work.');
         return false;
     }
 
-    webPush.setVapidDetails(email, publicKey, privateKey);
+    webPush.setVapidDetails(subject, publicKey, privateKey);
     console.log('✅ Web Push configured with VAPID keys');
     isConfigured = true;
     return true;
