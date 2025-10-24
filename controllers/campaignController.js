@@ -430,7 +430,7 @@ export const getActiveCampaigns = async (req, res) => {
     try {
         const campaigns = await Campaign.find({
             status: 'active'
-        }).sort({ start_date: -1 });
+        }).sort({ submission_deadline: 1 }); // Sort by submission deadline (closest first)
 
         const campaignsWithDetails = campaigns.map(campaign => ({
             id: campaign._id,
