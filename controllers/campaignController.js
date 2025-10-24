@@ -1407,7 +1407,19 @@ export const likeSubmission = async (req, res) => {
             });
         }
 
-        // Increment likes
+        // Check if user already liked
+        if (submission.liked_by && submission.liked_by.includes(user_id)) {
+            return res.status(400).json({
+                success: false,
+                message: 'You have already liked this submission'
+            });
+        }
+
+        // Add user to liked_by array and increment likes
+        if (!submission.liked_by) {
+            submission.liked_by = [];
+        }
+        submission.liked_by.push(user_id);
         submission.likes += 1;
         await submission.save();
 
@@ -1527,6 +1539,13 @@ export const unlikeSubmission = async (req, res) => {
     try {
         const { submission_id, user_id } = req.body;
 
+        if (!submission_id || !user_id) {
+            return res.status(400).json({
+                success: false,
+                message: 'Submission ID and User ID are required'
+            });
+        }
+
         const submission = await CampaignSubmission.findById(submission_id);
 
         if (!submission) {
@@ -1536,9 +1555,13 @@ export const unlikeSubmission = async (req, res) => {
             });
         }
 
-        // Decrement likes (ensure it doesn't go below 0)
-        submission.likes = Math.max(0, submission.likes - 1);
-        await submission.save();
+        // Remove user from liked_by array
+        if (submission.liked_by && submission.liked_by.includes(user_id)) {
+            submission.liked_by = submission.liked_by.filter(id => id.toString() !== user_id.toString());
+            // Decrement likes (ensure it doesn't go below 0)
+            submission.likes = Math.max(0, submission.likes - 1);
+            await submission.save();
+        }
 
         res.json({
             success: true,
@@ -2102,6 +2125,42 @@ export const getUserVotes = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error fetching user votes',
+            error: error.message
+        });
+    }
+};
+
+// Get user's likes (to prevent duplicate liking after page refresh)
+export const getUserLikes = async (req, res) => {
+    try {
+        const { user_id } = req.params;
+
+        if (!user_id) {
+            return res.status(400).json({
+                success: false,
+                message: 'User ID is required'
+            });
+        }
+
+        // Find all submissions where this user has liked
+        const likedSubmissions = await CampaignSubmission.find({
+            liked_by: user_id
+        }).select('_id');
+
+        // Return array of liked submission IDs
+        const likes = likedSubmissions.map(sub => ({
+            submission_id: sub._id
+        }));
+
+        res.json({
+            success: true,
+            likes
+        });
+    } catch (error) {
+        console.error('Get User Likes Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching user likes',
             error: error.message
         });
     }

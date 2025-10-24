@@ -28,6 +28,7 @@ import {
     unlikeSubmission,
     unvoteSubmission,
     getUserVotes,
+    getUserLikes,
     getUserLikedComments,
     // Comment features
     addComment,
@@ -117,6 +118,7 @@ router.post('/unlike', unlikeSubmission);
 router.post('/vote', voteSubmission);
 router.post('/unvote', unvoteSubmission);
 router.get('/user/:user_id/votes', getUserVotes);
+router.get('/user/:user_id/likes', getUserLikes);
 router.get('/user/:user_id/liked-comments', getUserLikedComments);
 
 // ============ COMMENT ROUTES ============
